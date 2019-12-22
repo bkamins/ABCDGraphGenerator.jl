@@ -57,7 +57,7 @@ function populate_clusters(params::ABCDParams)
 end
 
 function CL_model(clusters, params)
-    @asert params.isCL
+    @assert params.isCL
     w, s, μ = params.w, params.s, params.μ
     cluster_weight = zeros(Int, length(s))
     for i in axes(w, 1)
@@ -106,7 +106,7 @@ function CL_model(clusters, params)
 end
 
 function config_model(clusters, params)
-    @asert !params.isCL
+    @assert !params.isCL
     w, s, μ = params.w, params.s, params.μ
 
     cluster_weight = zeros(Int, length(s))

@@ -1,3 +1,3 @@
 using Pkg
 
-Pkg.add("https://github.com/bkamins/ABCDGraphGenerator.jl")
+Pkg.add(PackageSpec(url="https://github.com/bkamins/ABCDGraphGenerator.jl"))
