@@ -86,14 +86,14 @@ that was closest to a feasible one to ensure that the result is admissible.
 """
 function sample_communities(τ₂, c_min, c_max, n, max_iter)
     @assert 1 <= c_min <= c_max
-    l_min = n / c_min
-    l_max = n / c_max
+    l_min = n / c_max
+    l_max = n / c_min
     @assert l_min >= 1
     @assert ceil(l_min) <= floor(l_max)
     local best_s
     local best_ss = typemax(Int)
     for i in 1:max_iter
-        s = sample_trunc_powerlaw(τ₂, c_min, c_max, ceil(Int, n / c_min))
+        s = sample_trunc_powerlaw(τ₂, c_min, c_max, ceil(Int, l_max))
         stopidx = 0
         ss = 0
         while ss < n

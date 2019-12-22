@@ -1,16 +1,17 @@
 using ABCDGraphGenerator
 
 @info "Usage: julia com_sampler.jl filename τ₂ c_min c_max n max_iter"
-@info "Example: julia com_sampler.jl community_sizes.dat 3 5 50 10000 1000"
+@info "Example: julia com_sampler.jl community_sizes.dat 2 50 1000 10000 1000"
 
-τ₂ = parse(Float64, ARGS[1])
-c_min = parse(Int, ARGS[2])
-c_max = parse(Int, ARGS[3])
-n = parse(Int, ARGS[4])
-max_iter = parse(Int, ARGS[5])
+filename = ARGS[1]
+τ₂ = parse(Float64, ARGS[2])
+c_min = parse(Int, ARGS[3])
+c_max = parse(Int, ARGS[4])
+n = parse(Int, ARGS[5])
+max_iter = parse(Int, ARGS[6])
 
-@info "Expected value of community size: $(get_ev(τ₁, c_min, c_max))"
+@info "Expected value of community size: $(ABCDGraphGenerator.get_ev(τ₂, c_min, c_max))"
 
-coms = sample_degrees(τ₂, c_min, c_max, n, max_iter)
+coms = ABCDGraphGenerator.sample_communities(τ₂, c_min, c_max, n, max_iter)
 
 open(io -> foreach(d -> println(io, d), coms), filename, "w")
