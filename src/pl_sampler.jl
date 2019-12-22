@@ -61,7 +61,7 @@ function sample_degrees(τ₁, d_min, d_max, n, max_iter)
     local s
     for i in 1:max_iter
         s = sample_trunc_powerlaw(τ₁, d_min, d_max, n)
-        iseven(sum(s)) && return s
+        iseven(sum(s)) && return sort!(s, rev=true)
     end
     @warn "Failed to sample an admissible degree sequence in $max_iter draws. Fixing"
     i = argmax(s)
