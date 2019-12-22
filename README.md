@@ -3,6 +3,8 @@ Artificial Benchmark for Community Detection (ABCD) - A Fast Random Graph Model 
 
 Bogumił Kamiński, Paweł Prałat, François Théberge
 
+---
+
 The package does not export functions and types. The public API is the following:
 * `ABCDGraphGenerator.ABCDParams`: type holding information about sampled degrees,
   sampled cluster sizes and required mode of ABCD graph generation
