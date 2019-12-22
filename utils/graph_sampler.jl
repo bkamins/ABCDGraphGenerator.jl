@@ -15,7 +15,7 @@ p = ABCDGraphGenerator.ABCDParams(parse.(Int, readlines(degreefile)),
                                   parse.(Int, readlines(communitysizesfile)),
                                   μ, isCL, islocal)
 
-edges, clusters = gen_benchmark(p)
+edges, clusters = ABCDGraphGenerator.gen_graph(p)
 
 open(networkfile, "w") do io
     for (a, b) in sort!(collect(edges))
