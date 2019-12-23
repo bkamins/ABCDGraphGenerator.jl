@@ -153,11 +153,11 @@ function config_model(clusters, params)
             end
         end
         @assert sum(w_internal[cluster]) == length(stubs)
-        shuffle!(stubs)
+        shuffle!(@view stubs[1+w_internal[cluster[1]]:end])
         local_edges = Set{Tuple{Int, Int}}()
         recycle = Tuple{Int,Int}[]
-        for i in 1:2:length(stubs)
-            e = minmax(stubs[i], stubs[i+1])
+        for i in 1:length(stubs)÷2
+            e = minmax(stubs[i], stubs[end+1-i])
             if (e[1] == e[2]) || (e in local_edges)
                 push!(recycle, e)
             else
@@ -245,8 +245,8 @@ function config_model(clusters, params)
     shuffle!(stubs)
     global_edges = Set{Tuple{Int, Int}}()
     recycle = Tuple{Int,Int}[]
-    for i in 1:2:length(stubs)
-        e = minmax(stubs[i], stubs[i+1])
+    for i in 1:length(stubs) ÷ 2
+        e = minmax(stubs[i], stubs[end+1-i])
         if (e[1] == e[2]) || (e in global_edges) || (e in edges)
             push!(recycle, e)
         else
