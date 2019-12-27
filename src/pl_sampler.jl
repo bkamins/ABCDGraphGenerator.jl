@@ -66,7 +66,7 @@ function sample_degrees(τ₁, d_min, d_max, n, max_iter)
     @warn "Failed to sample an admissible degree sequence in $max_iter draws. Fixing"
     i = argmax(s)
     if s[i] == 0
-        s[i] = 1
+        s[i] = 1 # this should not happen in practice
     else
         s[i] -= 1
     end
