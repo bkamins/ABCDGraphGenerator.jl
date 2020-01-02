@@ -290,7 +290,7 @@ function config_model(clusters, params)
         unresolved_collisions += length(recycle)
     end
 
-    if VERBOSE[]
+    if unresolved_collisions > 0
         println("Unresolved_collisions: ", unresolved_collisions,
                 "; fraction: ", 2 * unresolved_collisions / total_weight)
     end
