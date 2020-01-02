@@ -24,11 +24,45 @@ to the use package without using the Julia language. A requirement for these
 utilities to be run is to have the Julia language in version at least 1.0 installed on a computer.
 It contains the following files:
 * `install.jl`: installs all required packages
+* `abcd_sampler.jl`: generates an ABCD graph folloging a configuration file
 * `deg_sampler.jl`: samples degrees of vertices in the graph
 * `com_sampler.jl`: samples communitiy sizes in the graph
 * `graph_sampler.jl`: samples edges and community assignments in the graph
 
-Here is an output from an example session using CLI:
+The main file intended to be used is `abcd_sampler.jl`.
+Here is an example configuration file, named `example_config.toml`, in this guide:
+```
+n = "10000"                   # number of vertices in graph
+t1 = "3"                      # power-law exponent for degree distribution
+d_min = "5"                   # minimum degree
+d_max = "50"                  # maximum degree
+d_max_iter = "1000"           # maximum number of iterations for sampling degrees
+t2 = "2"                      # power-law exponent for cluster size distribution
+c_min = "50"                  # minimum cluster size
+c_max = "1000"                # maximum cluster size
+c_max_iter = "1000"           # maximum number of iterations for sampling cluster sizes
+xi = "0.2"                    # fraction of edges to fall in background graph
+isCL = "false"                # if "false" use configuration model, if "true" use Chung-Lu
+degreefile = "deg.dat"        # name of file do generate that contains vertex degrees
+communitysizesfile = "cs.dat" # name of file do generate that contains community sizes
+communityfile = "com.dat"     # name of file do generate that contains assignments of vertices to communities
+networkfile = "edge.dat"      # name of file do generate that contains edges of the generated graph
+```
+In this file all parameters required to generate an ABCD graph and store to on disk are passed.
+Here is an output from an example session using CLI in the ABCD-generation mode using the above file:
+```
+$ julia abcd_sampler.jl example_config.toml
+[ Info: Usage: julia abcd_sampler.jl config_filename
+[ Info: For the syntax of config_filename see example_config.toml file
+[ Info: Expected value of degree: 8.327743727955891
+[ Info: Expected value of community size: 156.5613820733916
+```
+After the program terminates four files, `deg.dat`, `cs.dat`, `com.dat` and `edge.dat`
+are created in the working directory.
+
+`deg_sampler.jl`, `com_sampler.jl` and `graph_sampler.jl` files are provided
+mainly to facilitate comparisons with LFR algorithm.
+Here is an output from an example session using CLI in the LFR-comparison mode:
 ```
 $ julia install.jl
   Updating registry at `~\.julia\registries\General`
