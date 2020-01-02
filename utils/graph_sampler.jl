@@ -13,7 +13,7 @@ islocal = parse(Bool, ARGS[7])
 
 p = ABCDGraphGenerator.ABCDParams(parse.(Int, readlines(degreefile)),
                                   parse.(Int, readlines(communitysizesfile)),
-                                  μ, isCL, islocal)
+                                  μ, nothing, isCL, islocal)
 
 edges, clusters = ABCDGraphGenerator.gen_graph(p)
 

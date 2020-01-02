@@ -2,27 +2,49 @@
     ABCDParams
 
 A structure holding parameters for ABCD graph generator. Fields:
-* w::Vector{Int}: a sorted in descending order list of vertex degrees
-* s::Vector{Int}: a sorted in descending order list of cluster sizes
-* μ::Float64:     mixing parameter
-* isCL::Bool:     if `true` a Chung-Lu model is used, otherwise configuration model
-* islocal::Bool:  if `true` mixing parameter restriction is cluster local, otherwise
-                  it is only global
+* w::Vector{Int}:             a sorted in descending order list of vertex degrees
+* s::Vector{Int}:             a sorted in descending order list of cluster sizes
+* μ::Union{Float64, Nothing}: mixing parameter
+* ξ::Union{Float64, Nothing}: background graph fraction
+* isCL::Bool:                 if `true` a Chung-Lu model is used, otherwise configuration model
+* islocal::Bool:              if `true` mixing parameter restriction is cluster local, otherwise
+                              it is only global
+
+Exactly one of ξ and μ must be passed as `Float64`. Also if `ξ` is passed then
+`islocal` must be `false`.
+
+The base ABCD graph is generated when ξ is passed and `isCL` is set to `false`.
 """
 struct ABCDParams
     w::Vector{Int}
     s::Vector{Int}
-    μ::Float64
+    μ::Union{Float64, Nothing}
+    ξ::Union{Float64, Nothing}
     isCL::Bool
     islocal::Bool
 
-    function ABCDParams(w, s, μ, isCL, islocal)
+    function ABCDParams(w, s, μ, ξ, isCL, islocal)
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
-        0 ≤ μ ≤ 1 || throw(ArgumentError("inconsistent data"))
+        if !isnothing(μ)
+            0 ≤ μ ≤ 1 || throw(ArgumentError("inconsistent data on μ"))
+        end
+        if !isnothing(ξ)
+            0 ≤ ξ ≤ 1 || throw(ArgumentError("inconsistent data ξ"))
+            if islocal
+                throw(ArgumentError("when ξ is provided local model is not allowed"))
+            end
+        end
+        if isnothing(μ) && isnothing(ξ)
+            throw(ArgumentError("inconsistent data: either μ or ξ must be provided"))
+        end
+
+        if !(isnothing(μ) || isnothing(ξ))
+            throw(ArgumentError("inconsistent data: only μ or ξ may be provided"))
+        end
 
         new(sort(w, rev=true),
             sort(s, rev=true),
-            μ, isCL, islocal)
+            μ, ξ, isCL, islocal)
     end
 end
 
@@ -31,7 +53,7 @@ function randround(x)
     d + (rand() < x - d)
 end
 
-function populate_clusters(params::ABCDParams)
+function populate_clusters_μ(params::ABCDParams)
     nμ = 1 - params.μ
     w, s = params.w, params.s
     @assert length(w) == sum(s)
@@ -56,6 +78,36 @@ function populate_clusters(params::ABCDParams)
     clusters
 end
 
+function populate_clusters_ξ(params::ABCDParams)
+    ξ, w, s = params.ξ, params.w, params.s
+    @assert length(w) == sum(s)
+    @assert 0 ≤ ξ ≤ 1
+    @assert issorted(w, rev=true)
+    @assert issorted(s, rev=true)
+    n = length(w)
+    ϕ = 1.0 - sum((sl/n)^2 for sl in s)
+    nξ = 1 - ξ*ϕ
+
+    slots = copy(s)
+    clusters = Int[]
+    j = 0
+    for (i, vw) in enumerate(w)
+        while j + 1 ≤ length(s) && nξ * vw + 1 ≤ s[j + 1]
+            j += 1
+        end
+        j == 0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
+        wts = Weights(view(slots, 1:j))
+        wts.sum == 0 && throw(ArgumentError("could not find an empty slot for vertex of weight $vw"))
+        loc = sample(1:j, wts)
+        push!(clusters, loc)
+        slots[loc] -= 1
+    end
+    clusters
+end
+
+populate_clusters(params::ABCDParams) =
+    isnothing(ξ) ? populate_clusters_μ(params) : populate_clusters_ξ(params)
+
 function CL_model(clusters, params)
     @assert params.isCL
     w, s, μ = params.w, params.s, params.μ
@@ -68,8 +120,12 @@ function CL_model(clusters, params)
         ξl = @. μ / (1.0 - cluster_weight / total_weight)
         maximum(ξl) >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
     else
-        ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
-        ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
+        if isnothing(params.ξ)
+            ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
+            ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
+        else
+            ξg = params.ξ
+        end
     end
 
     wf = float.(w)
@@ -119,8 +175,12 @@ function config_model(clusters, params)
         maximum(ξl) >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
         w_internal_raw = [w[i] * (1 - ξl[clusters[i]]) for i in axes(w, 1)]
     else
-        ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
-        ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
+        if isnothing(params. ξ)
+            ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
+            ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
+        else
+            ξg = params.ξ
+        end
         w_internal_raw = [w[i] * (1 - ξg) for i in axes(w, 1)]
     end
 
