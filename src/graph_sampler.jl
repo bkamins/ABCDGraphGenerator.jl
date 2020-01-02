@@ -106,7 +106,7 @@ function populate_clusters_ξ(params::ABCDParams)
 end
 
 populate_clusters(params::ABCDParams) =
-    isnothing(ξ) ? populate_clusters_μ(params) : populate_clusters_ξ(params)
+    isnothing(params.ξ) ? populate_clusters_μ(params) : populate_clusters_ξ(params)
 
 function CL_model(clusters, params)
     @assert params.isCL

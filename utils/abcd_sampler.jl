@@ -22,10 +22,10 @@ c_min = parse(Int, conf["c_min"])
 c_max = parse(Int, conf["c_max"])
 c_max_iter = parse(Int, conf["c_max_iter"])
 @info "Expected value of community size: $(ABCDGraphGenerator.get_ev(τ₂, c_min, c_max))"
-coms = ABCDGraphGenerator.sample_communities(τ₂, c_min, c_max, n, max_iter)
+coms = ABCDGraphGenerator.sample_communities(τ₂, c_min, c_max, n, c_max_iter)
 open(io -> foreach(d -> println(io, d), coms), conf["communitysizesfile"], "w")
 
-ξ = parse(Float64, "xi")
+ξ = parse(Float64, conf["xi"])
 isCL = parse(Bool, conf["isCL"])
 p = ABCDGraphGenerator.ABCDParams(degs, coms, nothing, ξ, isCL, false)
 edges, clusters = ABCDGraphGenerator.gen_graph(p)
