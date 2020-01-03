@@ -53,11 +53,17 @@ function randround(x)
     d + (rand() < x - d)
 end
 
-function populate_clusters_μ(params::ABCDParams)
-    nμ = 1 - params.μ
+function populate_clusters(params::ABCDParams)
     w, s = params.w, params.s
+    if isnothing(params.ξ)
+        mul = 1.0 - params.μ
+    else
+        n = length(w)
+        ϕ = 1.0 - sum((sl/n)^2 for sl in s)
+        mul = 1.0 - ξ*ϕ
+    end
     @assert length(w) == sum(s)
-    @assert 0 ≤ nμ ≤ 1
+    @assert 0 ≤ mul ≤ 1
     @assert issorted(w, rev=true)
     @assert issorted(s, rev=true)
 
@@ -65,7 +71,7 @@ function populate_clusters_μ(params::ABCDParams)
     clusters = Int[]
     j = 0
     for (i, vw) in enumerate(w)
-        while j + 1 ≤ length(s) && nμ * vw + 1 ≤ s[j + 1]
+        while j + 1 ≤ length(s) && mul * vw + 1 ≤ s[j + 1]
             j += 1
         end
         j == 0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
@@ -77,36 +83,6 @@ function populate_clusters_μ(params::ABCDParams)
     end
     clusters
 end
-
-function populate_clusters_ξ(params::ABCDParams)
-    ξ, w, s = params.ξ, params.w, params.s
-    @assert length(w) == sum(s)
-    @assert 0 ≤ ξ ≤ 1
-    @assert issorted(w, rev=true)
-    @assert issorted(s, rev=true)
-    n = length(w)
-    ϕ = 1.0 - sum((sl/n)^2 for sl in s)
-    nξ = 1 - ξ*ϕ
-
-    slots = copy(s)
-    clusters = Int[]
-    j = 0
-    for (i, vw) in enumerate(w)
-        while j + 1 ≤ length(s) && nξ * vw + 1 ≤ s[j + 1]
-            j += 1
-        end
-        j == 0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
-        wts = Weights(view(slots, 1:j))
-        wts.sum == 0 && throw(ArgumentError("could not find an empty slot for vertex of weight $vw"))
-        loc = sample(1:j, wts)
-        push!(clusters, loc)
-        slots[loc] -= 1
-    end
-    clusters
-end
-
-populate_clusters(params::ABCDParams) =
-    isnothing(params.ξ) ? populate_clusters_μ(params) : populate_clusters_ξ(params)
 
 function CL_model(clusters, params)
     @assert params.isCL
