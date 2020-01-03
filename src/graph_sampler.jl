@@ -60,7 +60,7 @@ function populate_clusters(params::ABCDParams)
     else
         n = length(w)
         ϕ = 1.0 - sum((sl/n)^2 for sl in s)
-        mul = 1.0 - ξ*ϕ
+        mul = 1.0 - params.ξ*ϕ
     end
     @assert length(w) == sum(s)
     @assert 0 ≤ mul ≤ 1
