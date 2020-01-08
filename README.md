@@ -3,8 +3,6 @@ Artificial Benchmark for Community Detection (ABCD) - A Fast Random Graph Model 
 
 Bogumił Kamiński, Paweł Prałat, François Théberge
 
----
-
 ### Julia API
 
 The package does not export functions and types. The public API is the following:
@@ -21,7 +19,7 @@ The package does not export functions and types. The public API is the following
 The resason for such split of the functionality is that generation of vertex degrees
 and community sizes is fast, while the generation of the final graph is the most expensive step.
 
-### Using from R and Python
+### Using ABCDGraphGenerator.jl from R and Python
 
 The functions provided in the package can be directly called from R and Python.
 
