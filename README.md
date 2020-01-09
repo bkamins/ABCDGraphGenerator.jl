@@ -3,7 +3,7 @@ Artificial Benchmark for Community Detection (ABCD) - A Fast Random Graph Model 
 
 Bogumił Kamiński, Paweł Prałat, François Théberge
 
----
+### Julia API
 
 The package does not export functions and types. The public API is the following:
 * `ABCDGraphGenerator.ABCDParams`: type holding information about sampled degrees,
@@ -19,8 +19,18 @@ The package does not export functions and types. The public API is the following
 The resason for such split of the functionality is that generation of vertex degrees
 and community sizes is fast, while the generation of the final graph is the most expensive step.
 
-The `utils/` folder contains CLI utilities that are aimed at users that want
-to the use package without using the Julia language. A requirement for these
+### Using ABCDGraphGenerator.jl from R and Python
+
+The functions provided in the package can be directly called from R and Python.
+
+Instructions how to seamlessly integrate Julia into R session are given in the [JuliaCall](https://cran.r-project.org/web/packages/JuliaCall/index.html) package documentation.
+
+An interface to call Julia directly from Python is provided by the [PyJulia](https://github.com/JuliaPy/pyjulia) package.
+
+### Command Line Interface
+
+The `utils/` folder contains command line interface utilities that are aimed at users that want
+to the use package without using the API directly. A requirement for these
 utilities to be run is to have the Julia language in version at least 1.0 installed on a computer.
 It contains the following files:
 * `install.jl`: installs all required packages
