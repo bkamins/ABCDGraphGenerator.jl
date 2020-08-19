@@ -1,7 +1,7 @@
 using StatsBase, Random
 
 function sample_trunc_powerlaw(α::Real, v_min::Int, v_max::Int, n::Int)
-    @assert α > 1
+    @assert α >= 1
     @assert 1 <= v_min <= v_max
     @assert n > 0
     w = Weights([1/i^α for i in v_min:v_max])
