@@ -7,8 +7,7 @@ using Random
 
 filename = ARGS[1]
 conf = Pkg.TOML.parsefile(filename)
-seed = parse(Int, conf["seed"])
-seed != -1 && Random.seed!(seed)
+isempty(conf["seed"]) || Random.seed!(parse(Int, conf["seed"]))
 
 n = parse(Int, conf["n"])
 

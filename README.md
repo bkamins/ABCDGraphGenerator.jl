@@ -42,7 +42,7 @@ It contains the following files:
 The main file intended to be used is `abcd_sampler.jl`.
 Here is an example configuration file, named `example_config.toml`, in this guide:
 ```
-seed = "-1"                   # RNG seed, use -1 for no seeding
+seed = ""                     # RNG seed, use "" for no seeding
 n = "10000"                   # number of vertices in graph
 t1 = "3"                      # power-law exponent for degree distribution
 d_min = "5"                   # minimum degree
