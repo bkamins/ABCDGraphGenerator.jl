@@ -1,11 +1,14 @@
 using Pkg
 using ABCDGraphGenerator
+using Random
 
 @info "Usage: julia abcd_sampler.jl config_filename"
 @info "For the syntax of config_filename see example_config.toml file"
 
 filename = ARGS[1]
 conf = Pkg.TOML.parsefile(filename)
+seed = parse(Int, conf["seed"])
+seed != -1 && Random.seed!(seed)
 
 n = parse(Int, conf["n"])
 
