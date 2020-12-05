@@ -1,3 +1,4 @@
+seed = ""                     # RNG seed, use "" for no seeding
 n = "10000"                   # number of vertices in graph
 t1 = "3"                      # power-law exponent for degree distribution
 d_min = "5"                   # minimum degree
