@@ -9,6 +9,12 @@ filename = ARGS[1]
 conf = Pkg.TOML.parsefile(filename)
 isempty(conf["seed"]) || Random.seed!(parse(Int, conf["seed"]))
 
+μ = haskey(conf,"mu") ? parse(Float64, conf["mu"]) : nothing
+ξ = haskey(conf,"xi") ? parse(Float64, conf["xi"]) : nothing
+if !(isnothing(μ) || isnothing(ξ))
+    throw(ArgumentError("inconsistent data: only μ or ξ may be provided"))
+end
+
 n = parse(Int, conf["n"])
 
 τ₁ = parse(Float64, conf["t1"])
@@ -27,9 +33,10 @@ c_max_iter = parse(Int, conf["c_max_iter"])
 coms = ABCDGraphGenerator.sample_communities(τ₂, c_min, c_max, n, c_max_iter)
 open(io -> foreach(d -> println(io, d), coms), conf["communitysizesfile"], "w")
 
-ξ = parse(Float64, conf["xi"])
 isCL = parse(Bool, conf["isCL"])
-p = ABCDGraphGenerator.ABCDParams(degs, coms, nothing, ξ, isCL, false)
+islocal = haskey(conf,"islocal") ? parse(Bool, conf["islocal"]) : false
+
+p = ABCDGraphGenerator.ABCDParams(degs, coms, μ, ξ, isCL, islocal)
 edges, clusters = ABCDGraphGenerator.gen_graph(p)
 open(conf["networkfile"], "w") do io
     for (a, b) in sort!(collect(edges))
