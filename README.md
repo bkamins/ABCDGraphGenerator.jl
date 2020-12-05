@@ -70,7 +70,7 @@ $ julia abcd_sampler.jl example_config.toml
 [ Info: For the syntax of config_filename see example_config.toml file
 [ Info: Expected value of degree: 8.327743727955891
 [ Info: Expected value of community size: 156.5613820733916
-$ shasum -a 256 edge.dat
+$ shasum -a 256 edge.dat #sha256sum edge.dat on Linux
 1cf38c513db5890938b04a0e0e8059d32271ee3a96792a6992558f727c5b6ed8  edge.dat
 ```
 After the program terminates four files, `deg.dat`, `cs.dat`, `com.dat` and `edge.dat`
@@ -95,20 +95,20 @@ $ julia deg_sampler.jl degrees.dat 3 5 50 10000 1000 42
 [ Info: Usage: julia deg_sampler.jl filename τ₁ d_min d_max n max_iter [seed]
 [ Info: Example: julia deg_sampler.jl degrees.dat 3 5 50 10000 1000 42
 [ Info: Expected value of degree: 8.327743727955891
-$ shasum -a 256 degrees.dat
+$ shasum -a 256 degrees.dat #sha256sum degrees.dat on Linux
 10f8a9528c8f4560040c63c1431f9b0ddeb7d3c9cb426f9b943c1099a8185c94  degrees.dat
 
 $ julia com_sampler.jl community_sizes.dat 2 50 1000 10000 1000 42
 [ Info: Usage: julia com_sampler.jl filename τ₂ c_min c_max n max_iter [seed]
 [ Info: Example: julia com_sampler.jl community_sizes.dat 2 50 1000 10000 1000 42
 [ Info: Expected value of community size: 156.5613820733916
-$ shasum -a 256 community_sizes.dat
+$ shasum -a 256 community_sizes.dat #sha256sum community_sizes.dat on Linux
 d03bccc03937b620e6db4ba661781e49c1e40dcfb46c04355a9804edb49cfc86  community_sizes.dat
 
 $ julia graph_sampler.jl network.dat community.dat degrees.dat community_sizes.dat xi 0.2 true false 42
 [ Info: Usage: julia graph_sampler.jl networkfile communityfile degreefile communitysizesfile mu|xi fraction isCL islocal [seed]
 [ Info: Example: julia graph_sampler.jl network.dat community.dat degrees.dat community_sizes.dat xi 0.2 true false 42
-$ shasum -a 256 network.dat
+$ shasum -a 256 network.dat #sha256sum network.dat on Linux
 fbbc415fcc08c60f3370b646b019f108a924a43986f84ddb092255c7caa868f3  network.dat
 ```
 After running these commands you will have the following files in your working directory (all data is 1-based)):
