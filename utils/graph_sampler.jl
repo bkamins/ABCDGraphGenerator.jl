@@ -14,7 +14,7 @@ isCL = parse(Bool, ARGS[7])
 islocal = parse(Bool, ARGS[8])
 
 muxi in ["mu","xi"] || throw(ArgumentError("only mu or xi names are allowed for"))
-μ = ξ = nothing
+μ, ξ = nothing, nothing
 if muxi == "mu"
     μ = fraction
 else
