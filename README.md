@@ -42,7 +42,7 @@ It contains the following files:
 The main file intended to be used is `abcd_sampler.jl`.
 Here is an example configuration file, named `example_config.toml`, in this guide:
 ```
-seed = "42"                     # RNG seed, use "" for no seeding
+seed = "42"                   # RNG seed, use "" for no seeding
 n = "10000"                   # number of vertices in graph
 t1 = "3"                      # power-law exponent for degree distribution
 d_min = "5"                   # minimum degree
@@ -54,7 +54,7 @@ c_max = "1000"                # maximum cluster size
 c_max_iter = "1000"           # maximum number of iterations for sampling cluster sizes
 # Exactly one of xi and mu must be passed as Float64. Also if xi is provided islocal must be set to false or omitted.
 xi = "0.2"                    # fraction of edges to fall in background graph
-#mu = "0.2"                    # mixing parameter
+#mu = "0.2"                   # mixing parameter
 islocal = "false"             # if "true" mixing parameter is restricted to local cluster, otherwise it is global
 isCL = "false"                # if "false" use configuration model, if "true" use Chung-Lu
 degreefile = "deg.dat"        # name of file do generate that contains vertex degrees
