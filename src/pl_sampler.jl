@@ -100,7 +100,7 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
     @assert ceil(l_min) <= floor(l_max)
     local best_s
     local best_ss = typemax(Int)
-	w = trunc_powerlaw_weigths(τ₂, c_min, c_max)
+    w = trunc_powerlaw_weigths(τ₂, c_min, c_max)
     for i in 1:max_iter
         s = sample_trunc_powerlaw(w, c_min, c_max, ceil(Int, l_max))
         stopidx = 0
