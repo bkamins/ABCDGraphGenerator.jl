@@ -114,7 +114,7 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
     end
     i = 0
     while best_ss != n
-		i += 1
+        i += 1
         change = sign(n - best_ss)
         if change > 0
             best_s[i] < c_max || continue
