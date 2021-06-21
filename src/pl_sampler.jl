@@ -112,8 +112,9 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
         best_s = best_s[1:l_max]
         best_ss = sum(best_s)
     end
-    i = 1
+    i = 0
     while best_ss != n
+		i += 1
         change = sign(n - best_ss)
         if change > 0
             best_s[i] < c_max || continue
@@ -122,9 +123,8 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
         end
         best_ss += change
         best_s[i] += change
-        i += 1
-        if i > length(best_s)
-            i = 1
+        if i ≥ length(best_s)
+            i = 0
             shuffle!(best_s)
         end
     end
