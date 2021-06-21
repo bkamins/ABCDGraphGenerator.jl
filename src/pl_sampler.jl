@@ -1,5 +1,12 @@
 using StatsBase, Random
 
+function trunc_powerlaw_weigths(α::Real, v_min::Int, v_max::Int)
+    @assert α >= 1
+    @assert 1 <= v_min <= v_max
+    @assert n > 0
+    w = Weights([1/i^α for i in v_min:v_max])
+end
+
 function sample_trunc_powerlaw(α::Real, v_min::Int, v_max::Int, n::Int)
     @assert α >= 1
     @assert 1 <= v_min <= v_max
@@ -8,6 +15,7 @@ function sample_trunc_powerlaw(α::Real, v_min::Int, v_max::Int, n::Int)
     sample(v_min:v_max, w, n)
 end
 
+sample_trunc_powerlaw(W::Weights, v_min::Int, v_max::Int, n::Int) = sample(v_min:v_max, W, n)
 
 """
     get_ev(α, v_min, v_max)
@@ -92,8 +100,9 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
     @assert ceil(l_min) <= floor(l_max)
     local best_s
     local best_ss = typemax(Int)
+	w = trunc_powerlaw_weigths(τ₂, c_min, c_max)
     for i in 1:max_iter
-        s = sample_trunc_powerlaw(τ₂, c_min, c_max, ceil(Int, l_max))
+        s = sample_trunc_powerlaw(w, c_min, c_max, ceil(Int, l_max))
         stopidx = 0
         ss = 0
         while ss < n
