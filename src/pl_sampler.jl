@@ -3,7 +3,6 @@ using StatsBase, Random
 function trunc_powerlaw_weigths(α::Real, v_min::Int, v_max::Int)
     @assert α >= 1
     @assert 1 <= v_min <= v_max
-    @assert n > 0
     w = Weights([1/i^α for i in v_min:v_max])
 end
 
@@ -15,7 +14,7 @@ function sample_trunc_powerlaw(α::Real, v_min::Int, v_max::Int, n::Int)
     sample(v_min:v_max, w, n)
 end
 
-sample_trunc_powerlaw(W::Weights, v_min::Int, v_max::Int, n::Int) = sample(v_min:v_max, W, n)
+sample_trunc_powerlaw(W::Weights, v_min::Int, v_max::Int, n::Int) = (@assert n > 0; sample(v_min:v_max, W, n))
 
 """
     get_ev(α, v_min, v_max)
