@@ -1,7 +1,7 @@
 # ABCDGraphGenerator.jl
 Artificial Benchmark for Community Detection (ABCD) - A Fast Random Graph Model with Community Structure
 
-Bogumił Kamiński, Paweł Prałat, François Théberge
+Bogumił Kamiński, Paweł Prałat, François Théberge, Tomasz Olczak
 
 ### Julia API
 
@@ -65,7 +65,7 @@ networkfile = "edge.dat"      # name of file do generate that contains edges of 
 In this file all parameters required to generate an ABCD graph and store to on disk are passed.
 Here is an output from an example session using CLI in the ABCD-generation mode using the above file:
 ```
-$ julia abcd_sampler.jl example_config.toml
+$ julia [-t number_of_threads] abcd_sampler.jl example_config.toml
 [ Info: Usage: julia abcd_sampler.jl config_filename
 [ Info: For the syntax of config_filename see example_config.toml file
 [ Info: Expected value of degree: 8.327743727955891
