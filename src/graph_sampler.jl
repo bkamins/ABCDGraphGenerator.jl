@@ -176,12 +176,11 @@ function config_model(clusters, params)
         push!(clusterlist[clusters[i]], i)
     end
     # order by cluster size
-    idx = sortperm([length(cluster) for cluster in clusterlist], rev=false)
-    clusterlist = clusterlist[idx]
+    # idx = sortperm([length(cluster) for cluster in clusterlist], rev=true)
+    # clusterlist = clusterlist[idx]
 
     edges::Vector{Set{Tuple{Int32, Int32}}} = []
-
-    unresolved_collisions = 0
+    unresolved_collisions, length_recycle = 0, 0
     w_internal = zeros(Int32, length(w_internal_raw))
     mutex = ReentrantLock()
     @threads for tid in 1:nthreads()
@@ -206,131 +205,134 @@ function config_model(clusters, params)
         push!(thr_clusters, cluster)
         push!(thr_weights, w_cluster)
       end
-      @debug "tid $(tid) getting 1 lock"
+      @debug "tid $(tid) getting 1st lock"
       lock(mutex)
-        @debug "tid $(tid) got 1 lock"
-        foreach((cluster,w_cluster)->w_internal[cluster]=w_cluster, thr_clusters, thr_weights)
-        @debug "tid $(tid) releasing 1 lock"
+      @debug "tid $(tid) got 1st lock"
+      foreach((cluster,w_cluster)->w_internal[cluster]=w_cluster, thr_clusters, thr_weights)
+      @debug "tid $(tid) releasing 1st lock"
       unlock(mutex)
     end
 
-    @debug "GLOBAL starting"
     global_edges = Set{Tuple{Int32, Int32}}()
     recycle = Tuple{Int32,Int32}[]
     w_global = w - w_internal
     stubs::Vector{Int32} = zeros(Int32, sum(w_global))
-    gt = Threads.@spawn begin
-        sizehint!(global_edges, length(stubs)>>1)
 
-        v::Vector{Int32} = cumsum(w_global)
-        foreach((i,j,k)->stubs[i:j].=k, [1;v.+1], v, axes(w,1))
-        @assert sum(w) == length(stubs) + sum(w_internal)
-        shuffle!(stubs)
+    ch = Channel{Int}(1+length(s))
+    foreach(c->put!(ch, c), 0:length(s))
+    close(ch)
 
-        @debug "$(length(edges)) communities"
-        for i in 1:2:length(stubs)
-            e = minmax(stubs[i], stubs[i+1])
-            if (e[1] == e[2]) || (e in global_edges)
-                push!(recycle, e)
-            else
-                push!(global_edges, e)
-            end
-        end
-        @debug "dups1 are $(recycle)"
-    end
-    length_recycle = length(recycle)
+    @threads for tid in 1:nthreads()
+        local thr_edges   = Set{Tuple{Int32, Int32}}[]
+        local thr_recycle = Vector{Tuple{Int32,Int32}}[]
 
-    @threads for tid in 1:max(1, nthreads()-1)
-      local thr_edges   = Set{Tuple{Int32, Int32}}[]
-      local thr_recycle = Vector{Tuple{Int32,Int32}}[]
+        while !isempty(ch)
+            cid = take!(ch)
+            if cid == 0 # global/background graph
+                sizehint!(global_edges, length(stubs)>>1)
+                local v::Vector{Int32} = cumsum(w_global)
+                foreach((i,j,k)->stubs[i:j].=k, [1;v.+1], v, axes(w,1))
+                @assert sum(w) == length(stubs) + sum(w_internal)
+                shuffle!(stubs)
 
-      for c in tid:max(1, nthreads()-1):length(s)
-        local cluster = clusterlist[c]
-        local w_cluster = w_internal[cluster]
-
-        @debug "tid $(tid) cluster $(length(cluster)) w_cluster $(sum(w_cluster))"
-        local v::Vector{Int32} = cumsum(w_cluster)
-        local stubs::Vector{Int32} = zeros(Int32, sum(w_cluster))
-        foreach((i,j,k)->stubs[i:j].=k, [1;v.+1], v, cluster)
-        @assert sum(w_cluster) == length(stubs)
-
-        shuffle!(stubs)
-        local local_edges = Set{Tuple{Int32, Int32}}()
-        sizehint!(local_edges, length(stubs)>>1)
-        local recycle = Tuple{Int32,Int32}[]
-        for i in 1:2:length(stubs)
-            e = minmax(stubs[i], stubs[i+1])
-            if (e[1] == e[2]) || (e in local_edges)
-                push!(recycle, e)
-            else
-                push!(local_edges, e)
-            end
-        end
-        local last_recycle = length(recycle)
-        local recycle_counter = last_recycle
-        while !isempty(recycle)
-            recycle_counter -= 1
-            if recycle_counter < 0
-                if length(recycle) < last_recycle
-                    last_recycle = length(recycle)
-                    recycle_counter = last_recycle
-                else
-                    break
-                end
-            end
-            local p1 = popfirst!(recycle)
-            local from_recycle = 2 * length(recycle) / length(stubs)
-            local success = false
-            for _ in 1:2:length(stubs)
-                local p2 = if rand() < from_recycle
-                    used_recycle = true
-                    recycle_idx = rand(axes(recycle, 1))
-                    recycle[recycle_idx]
-                else
-                    used_recycle = false
-                    rand(local_edges)
-                end
-                if rand() < 0.5
-                    local newp1 = minmax(p1[1], p2[1])
-                    local newp2 = minmax(p1[2], p2[2])
-                else
-                    local newp1 = minmax(p1[1], p2[2])
-                    local newp2 = minmax(p1[2], p2[1])
-                end
-                if newp1 == newp2
-                    good_choice = false
-                elseif (newp1[1] == newp1[2]) || (newp1 in local_edges)
-                    good_choice = false
-                elseif (newp2[1] == newp2[2]) || (newp2 in local_edges)
-                    good_choice = false
-                else
-                    good_choice = true
-                end
-                if good_choice
-                    if used_recycle
-                        recycle[recycle_idx], recycle[end] = recycle[end], recycle[recycle_idx]
-                        pop!(recycle)
+                for i in 1:2:length(stubs)
+                    e = minmax(stubs[i], stubs[i+1])
+                    if (e[1] == e[2]) || (e in global_edges)
+                        push!(recycle, e)
                     else
-                        pop!(local_edges, p2)
+                        push!(global_edges, e)
                     end
-                    success = true
-                    push!(local_edges, newp1)
-                    push!(local_edges, newp2)
-                    break
                 end
+                length_recycle = length(recycle)
+                @debug "dups1 are $(recycle)"
+            else # community graphs
+                local cluster = clusterlist[cid]
+                local w_cluster = w_internal[cluster]
+
+                @debug "tid $(tid) cluster $(length(cluster)) w_cluster $(sum(w_cluster))"
+                local v = cumsum(w_cluster)
+                local local_stubs::Vector{Int32} = zeros(Int32, sum(w_cluster))
+                foreach((i,j,k)->local_stubs[i:j].=k, [1;v.+1], v, cluster)
+                @assert sum(w_cluster) == length(local_stubs)
+
+                shuffle!(local_stubs)
+                local local_edges = Set{Tuple{Int32, Int32}}()
+                sizehint!(local_edges, length(local_stubs)>>1)
+                local local_recycle = Tuple{Int32,Int32}[]
+                for i in 1:2:length(local_stubs)
+                    e = minmax(local_stubs[i], local_stubs[i+1])
+                    if (e[1] == e[2]) || (e in local_edges)
+                        push!(local_recycle, e)
+                    else
+                        push!(local_edges, e)
+                    end
+                end
+                local last_recycle = length(local_recycle)
+                local recycle_counter = last_recycle
+                while !isempty(local_recycle)
+                    recycle_counter -= 1
+                    if recycle_counter < 0
+                        if length(local_recycle) < last_recycle
+                            last_recycle = length(local_recycle)
+                            recycle_counter = last_recycle
+                        else
+                            break
+                        end
+                    end
+                    local p1 = popfirst!(local_recycle)
+                    local from_recycle = 2 * length(local_recycle) / length(local_stubs)
+                    local success = false
+                    for _ in 1:2:length(local_stubs)
+                        local p2 = if rand() < from_recycle
+                            used_recycle = true
+                            recycle_idx = rand(axes(local_recycle, 1))
+                            local_recycle[recycle_idx]
+                        else
+                            used_recycle = false
+                            rand(local_edges)
+                        end
+                        if rand() < 0.5
+                            local newp1 = minmax(p1[1], p2[1])
+                            local newp2 = minmax(p1[2], p2[2])
+                        else
+                            local newp1 = minmax(p1[1], p2[2])
+                            local newp2 = minmax(p1[2], p2[1])
+                        end
+                        if newp1 == newp2
+                            good_choice = false
+                        elseif (newp1[1] == newp1[2]) || (newp1 in local_edges)
+                            good_choice = false
+                        elseif (newp2[1] == newp2[2]) || (newp2 in local_edges)
+                            good_choice = false
+                        else
+                            good_choice = true
+                        end
+                        if good_choice
+                            if used_recycle
+                                local_recycle[recycle_idx], local_recycle[end] = local_recycle[end], local_recycle[recycle_idx]
+                                pop!(local_recycle)
+                            else
+                                pop!(local_edges, p2)
+                            end
+                            success = true
+                            push!(local_edges, newp1)
+                            push!(local_edges, newp2)
+                            break
+                        end
+                    end
+                    success || push!(local_recycle, p1)
+                end
+                push!(thr_edges, local_edges)
+                push!(thr_recycle, local_recycle)
             end
-            success || push!(recycle, p1)
         end
-        push!(thr_edges, local_edges)
-        push!(thr_recycle, recycle)
-      end
-      @debug "tid $(tid) getting 2 lock"
-      lock(mutex)
-        @debug "tid $(tid) got 2 lock"
+        @debug "tid $(tid) getting 2nd lock"
+        lock(mutex)
+        @debug "tid $(tid) got 2nd lock"
         append!(edges, thr_edges)
         append!(recycle, thr_recycle...)
-        @debug "tid $(tid) releasing 2 lock"
-      unlock(mutex)
+        @debug "tid $(tid) releasing 2nd lock"
+        unlock(mutex)
     end
 
     unresolved_collisions = length(recycle) - length_recycle
@@ -339,8 +341,6 @@ function config_model(clusters, params)
                 "; fraction: ", 2 * unresolved_collisions / total_weight)
     end
 
-    @debug "GLOBAL waiting to complete"
-    wait(gt)
     @debug "GLOBAL resolving dups"
     @debug "intersect $(length(global_edges)) global_edges with $(typeof(edges)) $([length(e) for e in edges])"
     dups = [Set{Tuple{Int32, Int32}}() for _ in axes(edges, 1)]

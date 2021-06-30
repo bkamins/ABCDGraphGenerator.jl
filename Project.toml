@@ -1,7 +1,7 @@
 name = "ABCDGraphGenerator"
 uuid = "4c9194b5-d5d9-4bea-bd96-43ca8ce89b0b"
 authors = ["Bogumił Kamiński, Paweł Prałat, François Théberge, Tomasz Olczak"]
-version = "0.2.0"
+version = "0.2.1"
 
 [deps]
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
