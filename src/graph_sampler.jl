@@ -106,21 +106,32 @@ function CL_model(clusters, params)
 
     wf = float.(w)
     edges = Set{Tuple{Int32, Int32}}()
-    for i in axes(s, 1)
-        local_edges = Set{Tuple{Int32, Int32}}()
-        idxᵢ = findall(==(i), clusters)
-        wᵢ = wf[idxᵢ]
-        ξ = params.islocal ? ξl[i] : ξg
-        m = randround((1-ξ) * sum(wᵢ) / 2)
-        ww = Weights(wᵢ)
-        while length(local_edges) < m
-            a = sample(idxᵢ, ww, m - length(local_edges))
-            b = sample(idxᵢ, ww, m - length(local_edges))
-            for (p, q) in zip(a, b)
-                p != q && push!(local_edges, minmax(p, q))
+    mutex = ReentrantLock()
+    @threads for tid in 1:nthreads()
+        local thr_edges = Set{Tuple{Int32, Int32}}[]
+        for i in tid:nthreads():length(s)
+            local local_edges = Set{Tuple{Int32, Int32}}()
+            local idxᵢ = findall(==(i), clusters)
+            @debug "tid:$(tid) start CL_model for i:$(i) size:$(length(idxᵢ))"
+            local wᵢ = wf[idxᵢ]
+            local ξ = params.islocal ? ξl[i] : ξg
+            local m = randround((1-ξ) * sum(wᵢ) / 2)
+            local ww = Weights(wᵢ)
+            while length(local_edges) < m
+                local a = sample(idxᵢ, ww, m - length(local_edges))
+                local b = sample(idxᵢ, ww, m - length(local_edges))
+                for (p, q) in zip(a, b)
+                    p != q && push!(local_edges, minmax(p, q))
+                end
             end
+            push!(thr_edges, local_edges)
+            @debug "tid:$(tid) end CL_model for i:$(i) size:$(length(idxᵢ))"
         end
-        union!(edges, local_edges)
+        @debug "tid:$(tid) synch CL_model"
+        lock(mutex)
+        union!(edges, thr_edges...)
+        unlock(mutex)
+        @debug "tid:$(tid) end CL_model"
     end
     wwt = if params.islocal
         Weights([ξl[clusters[i]]*x for (i,x) in enumerate(wf)])
