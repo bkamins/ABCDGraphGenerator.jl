@@ -7,6 +7,7 @@ version = "0.1.0"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+SentinelArrays = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
 
 [compat]
 StatsBase = "0.32, 0.33"
