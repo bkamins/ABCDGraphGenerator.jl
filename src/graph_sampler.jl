@@ -329,7 +329,9 @@ function config_model(clusters, params)
     old_len = length(edges)
     union!(edges, global_edges)
     @assert length(edges) == old_len + length(global_edges)
-
+    if isempty(recycle)
+        @assert 2 * length(global_edges) == length(stubs)
+    else
     last_recycle = length(recycle)
     recycle_counter = last_recycle
     while !isempty(recycle)
@@ -360,9 +362,7 @@ function config_model(clusters, params)
             end
         end
     end
-    if isempty(recycle)
-        @assert 2 * length(global_edges) == length(stubs)
-    else
+    if !isempty(recycle)
         unresolved_collisions = length(recycle)
         println("Very hard graph. Failed to generate ", unresolved_collisions,
                 "edges; fraction: ", 2 * unresolved_collisions / total_weight)        
