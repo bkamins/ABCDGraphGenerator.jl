@@ -355,7 +355,7 @@ function config_model(clusters, params)
             newp2 = minmax(p1[2], p2[1])
         end
         for newp in (newp1, newp2)
-            if (newp[1] == newp[2]) || (newp in global_edges) || (newp in edges)
+            if (newp[1] == newp[2]) || (newp in edges)
                 push!(recycle, newp)
             else
                 push!(edges, newp)
