@@ -332,33 +332,34 @@ function config_model(clusters, params)
     if isempty(recycle)
         @assert 2 * length(global_edges) == length(stubs)
     else
-    last_recycle = length(recycle)
-    recycle_counter = last_recycle
-    while !isempty(recycle)
-        recycle_counter -= 1
-        if recycle_counter < 0
-            if length(recycle) < last_recycle
-                last_recycle = length(recycle)
-                recycle_counter = last_recycle
-            else
-                break
+        last_recycle = length(recycle)
+        recycle_counter = last_recycle
+        while !isempty(recycle)
+            recycle_counter -= 1
+            if recycle_counter < 0
+                if length(recycle) < last_recycle
+                    last_recycle = length(recycle)
+                    recycle_counter = last_recycle
+                else
+                    break
+                end
             end
-        end
-        p1 = pop!(recycle)
-        x = rand(edges)
-        p2 = pop!(edges, x)
-        if rand() < 0.5
-            newp1 = minmax(p1[1], p2[1])
-            newp2 = minmax(p1[2], p2[2])
-        else
-            newp1 = minmax(p1[1], p2[2])
-            newp2 = minmax(p1[2], p2[1])
-        end
-        for newp in (newp1, newp2)
-            if (newp[1] == newp[2]) || (newp in edges)
-                push!(recycle, newp)
+            p1 = pop!(recycle)
+            x = rand(edges)
+            p2 = pop!(edges, x)
+            if rand() < 0.5
+                newp1 = minmax(p1[1], p2[1])
+                newp2 = minmax(p1[2], p2[2])
             else
-                push!(edges, newp)
+                newp1 = minmax(p1[1], p2[2])
+                newp2 = minmax(p1[2], p2[1])
+            end
+            for newp in (newp1, newp2)
+                if (newp[1] == newp[2]) || (newp in edges)
+                    push!(recycle, newp)
+                else
+                    push!(edges, newp)
+                end
             end
         end
     end
