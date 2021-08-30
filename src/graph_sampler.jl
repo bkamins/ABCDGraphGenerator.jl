@@ -289,7 +289,18 @@ function config_model(clusters, params)
             push!(global_edges, e)
         end
     end
+    last_recycle = length(recycle)
+    recycle_counter = last_recycle
     while !isempty(recycle)
+        recycle_counter -= 1
+        if recycle_counter < 0
+            if length(recycle) < last_recycle
+                last_recycle = length(recycle)
+                recycle_counter = last_recycle
+            else
+                break
+            end
+        end
         p1 = pop!(recycle)
         from_recycle = 2 * length(recycle) / length(stubs)
         p2 = if rand() < from_recycle
@@ -318,8 +329,46 @@ function config_model(clusters, params)
     old_len = length(edges)
     union!(edges, global_edges)
     @assert length(edges) == old_len + length(global_edges)
-    @assert 2 * length(global_edges) == length(stubs)
-    edges
+    if isempty(recycle)
+        @assert 2 * length(global_edges) == length(stubs)
+    else
+        last_recycle = length(recycle)
+        recycle_counter = last_recycle
+        while !isempty(recycle)
+            recycle_counter -= 1
+            if recycle_counter < 0
+                if length(recycle) < last_recycle
+                    last_recycle = length(recycle)
+                    recycle_counter = last_recycle
+                else
+                    break
+                end
+            end
+            p1 = pop!(recycle)
+            x = rand(edges)
+            p2 = pop!(edges, x)
+            if rand() < 0.5
+                newp1 = minmax(p1[1], p2[1])
+                newp2 = minmax(p1[2], p2[2])
+            else
+                newp1 = minmax(p1[1], p2[2])
+                newp2 = minmax(p1[2], p2[1])
+            end
+            for newp in (newp1, newp2)
+                if (newp[1] == newp[2]) || (newp in edges)
+                    push!(recycle, newp)
+                else
+                    push!(edges, newp)
+                end
+            end
+        end
+    end
+    if !isempty(recycle)
+        unresolved_collisions = length(recycle)
+        println("Very hard graph. Failed to generate ", unresolved_collisions,
+                "edges; fraction: ", 2 * unresolved_collisions / total_weight)        
+    end
+    return edges
 end
 
 """
