@@ -22,8 +22,9 @@ struct ABCDParams
     ξ::Union{Float64, Nothing}
     isCL::Bool
     islocal::Bool
+    hasoutliers::Bool
 
-    function ABCDParams(w, s, μ, ξ, isCL, islocal)
+    function ABCDParams(w, s, μ, ξ, isCL, islocal, hasoutliers=false)
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
         if !isnothing(μ)
             0 ≤ μ ≤ 1 || throw(ArgumentError("inconsistent data on μ"))
@@ -44,7 +45,7 @@ struct ABCDParams
 
         new(sort(w, rev=true),
             sort(s, rev=true),
-            μ, ξ, isCL, islocal)
+            μ, ξ, isCL, islocal, hasoutliers)
     end
 end
 
@@ -71,7 +72,7 @@ function populate_clusters(params::ABCDParams)
     clusters = Int[]
     j = 0
     for (i, vw) in enumerate(w)
-        while j + 1 ≤ length(s) && mul * vw + 1 ≤ s[j + 1]
+        while j + 1 ≤ length(s) && ((j == 0 && params.hasoutliers) || mul * vw + 1 ≤ s[j + 1])
             j += 1
         end
         j == 0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
@@ -107,6 +108,7 @@ function CL_model(clusters, params)
     wf = float.(w)
     edges = Set{Tuple{Int, Int}}()
     for i in axes(s, 1)
+        params.hasoutliers && i == 1 && continue
         local_edges = Set{Tuple{Int, Int}}()
         idxᵢ = findall(==(i), clusters)
         wᵢ = wf[idxᵢ]
@@ -122,11 +124,15 @@ function CL_model(clusters, params)
         end
         union!(edges, local_edges)
     end
-    wwt = if params.islocal
-        Weights([ξl[clusters[i]]*x for (i,x) in enumerate(wf)])
+    if params.islocal
+        tmp_w = [ξl[clusters[i]]*x for (i,x) in enumerate(wf)]
     else
-        Weights(ξg * wf)
+        tmp_w = ξg * wf
     end
+    if params.hasoutliers
+        tmp_w[1] = wf[1]
+    end
+    wwt = Weights(tmp_w)
     while 2*length(edges) < total_weight
         a = sample(axes(w, 1), wwt, randround(total_weight / 2) - length(edges))
         b = sample(axes(w, 1), wwt, randround(total_weight / 2) - length(edges))
@@ -150,14 +156,20 @@ function config_model(clusters, params)
         ξl = @. μ / (1.0 - cluster_weight / total_weight)
         maximum(ξl) >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
         w_internal_raw = [w[i] * (1 - ξl[clusters[i]]) for i in axes(w, 1)]
+        if params.hasoutliers
+            w_internal_raw[clusters .== 1] = 0
+        end
     else
-        if isnothing(params. ξ)
+        if isnothing(params.ξ)
             ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
             ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
         else
             ξg = params.ξ
         end
         w_internal_raw = [w[i] * (1 - ξg) for i in axes(w, 1)]
+        if params.hasoutliers
+            w_internal_raw[clusters .== 1] = 0
+        end
     end
 
     clusterlist = [Int[] for i in axes(s, 1)]
@@ -182,6 +194,9 @@ function config_model(clusters, params)
         maxw = floor(Int, w_internal_raw[cluster[maxw_idx]])
         w_internal[cluster[maxw_idx]] = maxw + (isodd(wsum) ? iseven(maxw) : isodd(maxw))
 
+        if params.hasoutliers
+            @assert all(iszero, w_internal[cluster .== 1])
+        end
         stubs = Int[]
         for i in cluster
             for j in 1:w_internal[i]
@@ -366,7 +381,7 @@ function config_model(clusters, params)
     if !isempty(recycle)
         unresolved_collisions = length(recycle)
         println("Very hard graph. Failed to generate ", unresolved_collisions,
-                "edges; fraction: ", 2 * unresolved_collisions / total_weight)        
+                "edges; fraction: ", 2 * unresolved_collisions / total_weight)
     end
     return edges
 end
