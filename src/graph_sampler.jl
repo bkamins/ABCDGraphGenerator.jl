@@ -90,9 +90,11 @@ function populate_clusters(params::ABCDParams)
         tabu = sample(idx:n, nout, replace=false)
         clusters[tabu] = 1
         slots[1] = 0
+        stabu = Set(tabu)
+    else
+        stabu = Set{Int}()
     end
 
-    stabu = Set(tabu)
     j0 = params.hasoutliers ? 1 : 0
     j = j0
     for (i, vw) in enumerate(w)
