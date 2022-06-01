@@ -54,7 +54,9 @@ c_max = parse(Int, conf["c_max"])
 c_max_iter = parse(Int, conf["c_max_iter"])
 @info "Expected value of community size: $(ABCDGraphGenerator.get_ev(τ₂, c_min, c_max))"
 coms = ABCDGraphGenerator.sample_communities(τ₂, c_min, c_max, n, c_max_iter)
-pushfirst!(coms, nout)
+if nout > 0
+    pushfirst!(coms, nout)
+end
 open(io -> foreach(d -> println(io, d), coms), conf["communitysizesfile"], "w")
 
 p = ABCDGraphGenerator.ABCDParams(degs, coms, μ, ξ, isCL, islocal, nout > 0)
