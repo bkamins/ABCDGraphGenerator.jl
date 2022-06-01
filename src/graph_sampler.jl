@@ -4,11 +4,13 @@
 A structure holding parameters for ABCD graph generator. Fields:
 * w::Vector{Int}:             a sorted in descending order list of vertex degrees
 * s::Vector{Int}:             a sorted in descending order list of cluster sizes
+                              if hasoutliers then first community is outliers
 * μ::Union{Float64, Nothing}: mixing parameter
 * ξ::Union{Float64, Nothing}: background graph fraction
 * isCL::Bool:                 if `true` a Chung-Lu model is used, otherwise configuration model
 * islocal::Bool:              if `true` mixing parameter restriction is cluster local, otherwise
                               it is only global
+* hasoutliers::Bool:          if first community is outliers
 
 Exactly one of ξ and μ must be passed as `Float64`. Also if `ξ` is passed then
 `islocal` must be `false`.
@@ -43,8 +45,15 @@ struct ABCDParams
             throw(ArgumentError("inconsistent data: only μ or ξ may be provided"))
         end
 
+        if hasoutliers
+            news = copy(s)
+            sort!(@view(news[2:end]), rev=true)
+        else
+            news = sort(s, rev=true)
+        end
+
         new(sort(w, rev=true),
-            sort(s, rev=true),
+            news,
             μ, ξ, isCL, islocal, hasoutliers)
     end
 end
@@ -72,7 +81,11 @@ function populate_clusters(params::ABCDParams)
     @assert length(w) == sum(s)
     @assert 0 ≤ mul ≤ 1
     @assert issorted(w, rev=true)
-    @assert issorted(s, rev=true)
+    if params.hasoutliers
+        @assert issorted(s[2:end], rev=true)
+    else
+        @assert issorted(s, rev=true)
+    end
 
     slots = copy(s)
     clusters = fill(-1, length(w))
