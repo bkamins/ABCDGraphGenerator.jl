@@ -60,7 +60,13 @@ function populate_clusters(params::ABCDParams)
         mul = 1.0 - params.μ
     else
         n = length(w)
-        ϕ = 1.0 - sum((sl/n)^2 for sl in s)
+        if params.hasoutliers
+            s0 = s[1]
+            n = length(params.w)
+            ϕ = 1.0 - sum((sl/(n-s0))^2 for sl in s[2:end]) * (n-s0)*params.ξ / ((n-s0)*params.ξ + s0)
+        else
+            ϕ = 1.0 - sum((sl/n)^2 for sl in s)
+        end
         mul = 1.0 - params.ξ*ϕ
     end
     @assert length(w) == sum(s)
@@ -69,23 +75,45 @@ function populate_clusters(params::ABCDParams)
     @assert issorted(s, rev=true)
 
     slots = copy(s)
-    clusters = Int[]
-    j = 0
+    clusters = fill(-1, length(w))
+
+    if params.hasoutliers
+        nout = s[1]
+        n = length(params.w)
+        L = sum(d -> min(1.0, params.ξ * d), params.w)
+        threshold = L + nout - L * nout / n - 1.0
+        idx = findfirst(<=(threshold), params.w)
+        @assert all(i -> params.w[i] <= threshold, idx:n)
+        if length(idx:n) < nout
+            throw(ArgumentError("not enough nodes feasible for classification as outliers"))
+        end
+        tabu = sample(idx:n, nout, replace=false)
+        clusters[tabu] = 1
+        slots[1] = 0
+    end
+
+    stabu = Set(tabu)
+    j0 = params.hasoutliers ? 1 : 0
+    j = j
     for (i, vw) in enumerate(w)
-        while j + 1 ≤ length(s) && ((j == 0 && params.hasoutliers) || mul * vw + 1 ≤ s[j + 1])
+        i in stabu && continue
+        while j + 1 ≤ length(s) && mul * vw + 1 ≤ s[j + 1]
             j += 1
         end
-        j == 0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
-        wts = Weights(view(slots, 1:j))
+        j == j0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
+        wts = Weights(view(slots, (j0+1):j))
         wts.sum == 0 && throw(ArgumentError("could not find an empty slot for vertex of weight $vw"))
-        loc = sample(1:j, wts)
-        push!(clusters, loc)
+        loc = sample((j0+1):j, wts)
+        clusters[i] = loc
         slots[loc] -= 1
     end
-    clusters
+    @assert sum(slots) == 0
+    @assert minimum(clusters) == 1
+    return clusters
 end
 
 function CL_model(clusters, params)
+    @assert !hasoutliers
     @assert params.isCL
     w, s, μ = params.w, params.s, params.μ
     cluster_weight = zeros(Int, length(s))
@@ -145,6 +173,7 @@ end
 
 function config_model(clusters, params)
     @assert !params.isCL
+    @assert !params.islocal
     w, s, μ = params.w, params.s, params.μ
 
     cluster_weight = zeros(Int, length(s))
@@ -156,11 +185,9 @@ function config_model(clusters, params)
         ξl = @. μ / (1.0 - cluster_weight / total_weight)
         maximum(ξl) >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
         w_internal_raw = [w[i] * (1 - ξl[clusters[i]]) for i in axes(w, 1)]
-        if params.hasoutliers
-            w_internal_raw[clusters .== 1] = 0
-        end
     else
         if isnothing(params.ξ)
+            @assert !params.hasoutliers
             ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
             ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
         else
@@ -168,7 +195,9 @@ function config_model(clusters, params)
         end
         w_internal_raw = [w[i] * (1 - ξg) for i in axes(w, 1)]
         if params.hasoutliers
-            w_internal_raw[clusters .== 1] = 0
+            for i in findall(==(1), clusters)
+                w_internal_raw[i] = 0
+            end
         end
     end
 
@@ -194,7 +223,7 @@ function config_model(clusters, params)
         maxw = floor(Int, w_internal_raw[cluster[maxw_idx]])
         w_internal[cluster[maxw_idx]] = maxw + (isodd(wsum) ? iseven(maxw) : isodd(maxw))
 
-        if params.hasoutliers
+        if params.hasoutliers && cluster === clusters[1]
             @assert all(iszero, w_internal[cluster .== 1])
         end
         stubs = Int[]
@@ -204,6 +233,10 @@ function config_model(clusters, params)
             end
         end
         @assert sum(w_internal[cluster]) == length(stubs)
+        @assert iseven(length(stubs))
+        if params.hasoutliers && cluster === clusters[1]
+            @assert isempty(stubs)
+        end
         shuffle!(stubs)
         local_edges = Set{Tuple{Int, Int}}()
         recycle = Tuple{Int,Int}[]

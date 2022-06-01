@@ -23,6 +23,23 @@ end
 
 n = parse(Int, conf["n"])
 
+if nout > n
+    throw(ArgumentError("number of outliers cannot be larger than graph size"))
+end
+
+islocal = haskey(conf, "islocal") ? parse(Bool, conf["islocal"]) : false
+if islocal && nout > 0
+    throw(ArgumentError("local graph is not supported with outliers"))
+end
+
+isCL = parse(Bool, conf["isCL"])
+if isCL && nout > 0
+    throw(ArgumentError("Chung-Lu graph is not supported with outliers"))
+end
+
+# in what follows n is number of non-outlier nodes
+n = n - nout
+
 τ₁ = parse(Float64, conf["t1"])
 d_min = parse(Int, conf["d_min"])
 d_max = parse(Int, conf["d_max"])
@@ -39,9 +56,6 @@ c_max_iter = parse(Int, conf["c_max_iter"])
 coms = ABCDGraphGenerator.sample_communities(τ₂, c_min, c_max, n, c_max_iter)
 push!first(coms, nout)
 open(io -> foreach(d -> println(io, d), coms), conf["communitysizesfile"], "w")
-
-isCL = parse(Bool, conf["isCL"])
-islocal = haskey(conf, "islocal") ? parse(Bool, conf["islocal"]) : false
 
 p = ABCDGraphGenerator.ABCDParams(degs, coms, μ, ξ, isCL, islocal, nout > 0)
 edges, clusters = ABCDGraphGenerator.gen_graph(p)
