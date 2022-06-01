@@ -166,7 +166,7 @@ function CL_model(clusters, params)
         end
         union!(edges, local_edges)
     end
-    wtt = if params.islocal
+    wwt = if params.islocal
         Weights([ξl[clusters[i]]*x for (i,x) in enumerate(wf)])
     else
         Weights(ξg * wf)
