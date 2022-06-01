@@ -17,4 +17,4 @@ degreefile = "deg.dat"        # name of file do generate that contains vertex de
 communitysizesfile = "cs.dat" # name of file do generate that contains community sizes
 communityfile = "com.dat"     # name of file do generate that contains assignments of vertices to communities
 networkfile = "edge.dat"      # name of file do generate that contains edges of the generated graph
-nout = "0"                   # number of extra vertices in graph that are outliers; optional parameter
+nout = "0"                    # number of vertices in graph that are outliers; optional parameter

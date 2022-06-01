@@ -94,7 +94,7 @@ function populate_clusters(params::ABCDParams)
 
     stabu = Set(tabu)
     j0 = params.hasoutliers ? 1 : 0
-    j = j
+    j = j0
     for (i, vw) in enumerate(w)
         i in stabu && continue
         while j + 1 ≤ length(s) && mul * vw + 1 ≤ s[j + 1]
