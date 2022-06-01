@@ -88,7 +88,7 @@ function populate_clusters(params::ABCDParams)
             throw(ArgumentError("not enough nodes feasible for classification as outliers"))
         end
         tabu = sample(idx:n, nout, replace=false)
-        clusters[tabu] = 1
+        clusters[tabu] .= 1
         slots[1] = 0
         stabu = Set(tabu)
     else
