@@ -151,7 +151,6 @@ function CL_model(clusters, params)
     wf = float.(w)
     edges = Set{Tuple{Int, Int}}()
     for i in axes(s, 1)
-        params.hasoutliers && i == 1 && continue
         local_edges = Set{Tuple{Int, Int}}()
         idxᵢ = findall(==(i), clusters)
         wᵢ = wf[idxᵢ]
@@ -167,15 +166,11 @@ function CL_model(clusters, params)
         end
         union!(edges, local_edges)
     end
-    if params.islocal
-        tmp_w = [ξl[clusters[i]]*x for (i,x) in enumerate(wf)]
+    wtt = if params.islocal
+        Weights([ξl[clusters[i]]*x for (i,x) in enumerate(wf)])
     else
-        tmp_w = ξg * wf
+        Weights(ξg * wf)
     end
-    if params.hasoutliers
-        tmp_w[1] = wf[1]
-    end
-    wwt = Weights(tmp_w)
     while 2*length(edges) < total_weight
         a = sample(axes(w, 1), wwt, randround(total_weight / 2) - length(edges))
         b = sample(axes(w, 1), wwt, randround(total_weight / 2) - length(edges))
