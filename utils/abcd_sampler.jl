@@ -9,7 +9,7 @@ filename = ARGS[1]
 conf = Pkg.TOML.parsefile(filename)
 isempty(conf["seed"]) || Random.seed!(parse(Int, conf["seed"]))
 
-nout = haskey(conf, "nout") ? parse(Float64, conf["nout"]) : 0
+nout = haskey(conf, "nout") ? parse(Int, conf["nout"]) : 0
 
 μ = haskey(conf, "mu") ? parse(Float64, conf["mu"]) : nothing
 ξ = haskey(conf, "xi") ? parse(Float64, conf["xi"]) : nothing
