@@ -232,6 +232,10 @@ function config_model(clusters, params)
         end
         maxw = floor(Int, w_internal_raw[cluster[maxw_idx]])
         w_internal[cluster[maxw_idx]] = maxw + (isodd(wsum) ? iseven(maxw) : isodd(maxw))
+        if w_internal[cluster[maxw_idx]] > w[cluster[maxw_idx]]
+            @assert w[cluster[maxw_idx]] + 1 == w_internal[cluster[maxw_idx]]
+            w[cluster[maxw_idx]] += 1
+        end
 
         if params.hasoutliers && cluster === clusters[1]
             @assert all(iszero, w_internal[cluster .== 1])
@@ -337,6 +341,20 @@ function config_model(clusters, params)
     end
     @assert sum(w) == length(stubs) + sum(w_internal)
     shuffle!(stubs)
+    if isodd(length(stubs))
+        maxi = 1
+        @assert w[stubs[maxi]] > w_internal[stubs[maxi]
+        for i in 2:length(stubs)
+            si = stubs[i]
+            @assert w[si] > w_internal[si]
+            if w[si] > w[stubs[maxi]]
+                maxi = i
+            end
+        end
+        si = popat!(stubs, maxi)
+        @assert w[si] > w_internal[si]
+        w[si] -= 1
+    end
     global_edges = Set{Tuple{Int, Int}}()
     recycle = Tuple{Int,Int}[]
     for i in 1:2:length(stubs)
