@@ -343,7 +343,7 @@ function config_model(clusters, params)
     shuffle!(stubs)
     if isodd(length(stubs))
         maxi = 1
-        @assert w[stubs[maxi]] > w_internal[stubs[maxi]
+        @assert w[stubs[maxi]] > w_internal[stubs[maxi]]
         for i in 2:length(stubs)
             si = stubs[i]
             @assert w[si] > w_internal[si]
