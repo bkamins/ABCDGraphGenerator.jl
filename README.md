@@ -8,7 +8,7 @@ Bogumił Kamiński, Paweł Prałat, François Théberge
 The repository contains `Makefile` which can be used to simplify docker image and container usage.
 * `make build` - builds the docker image
 * `make save` - saves the docker image in `tar.gz` format
-* `make load` - loads the docker image from `julia_abcd.tar.gz` file (file should be located in current directory)
+* `make load` - loads the docker image from `julia_abcd.tar.gz` file from current directory (works properly only if docker image is not present yet)
 * `make run` - runs the docker container ready to receive instructions from CLI (just as in [Command Line Interface section](#command-line-interface)).
 
 Docker caveats:
