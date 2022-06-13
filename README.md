@@ -12,8 +12,8 @@ The repository contains `Makefile` which can be used to simplify docker image an
 * `make run` - runs the docker container ready to receive instructions from CLI (just as in [Command Line Interface section](#command-line-interface)).
 
 Docker caveats:
-* config file should be edited in `./conf/config.yaml` to ensure durability between docker container sessions (it is a volume mounted by `docker-compose.yaml`).
-* each time when output file is necessary to be specified from CLI, it should be ensured that each output file should be saved to `./output` location, e.g. `julia deg_sampler.jl ./output/degrees.dat 3 5 50 10000 1000 42` (in order to ensure output durability between docker container sessions).
+* config file should be edited in `./conf/config.yaml` to ensure persistence between docker container sessions (it is a volume mounted by `docker-compose.yaml`).
+* each time when output file is necessary to be specified from CLI, it should be ensured that each output file should be saved to `./output` location, e.g. `julia deg_sampler.jl ./output/degrees.dat 3 5 50 10000 1000 42` (in order to ensure output persistence between docker container sessions).
 
 
 ### Julia API
