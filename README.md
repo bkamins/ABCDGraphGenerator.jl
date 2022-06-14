@@ -3,6 +3,19 @@ Artificial Benchmark for Community Detection (ABCD) - A Fast Random Graph Model 
 
 Bogumił Kamiński, Paweł Prałat, François Théberge
 
+### Docker instructions
+
+The repository contains `Makefile` which can be used to simplify docker image and container usage.
+* `make build` - builds the docker image
+* `make save` - saves the docker image in `tar.gz` format
+* `make load` - loads the docker image from `julia_abcd.tar.gz` file from current directory (works properly only if docker image is not present yet)
+* `make run` - runs the docker container ready to receive instructions from CLI (just as in [Command Line Interface section](#command-line-interface)).
+
+Docker caveats:
+* config file should be edited in `./conf/config.yaml` to ensure persistence between docker container sessions (it is a volume mounted by `docker-compose.yaml`).
+* each time when output file is necessary to be specified from CLI, it should be ensured that each output file should be saved to `./output` location, e.g. `julia deg_sampler.jl ./output/degrees.dat 3 5 50 10000 1000 42` (in order to ensure output persistence between docker container sessions).
+
+
 ### Julia API
 
 The package does not export functions and types. The public API is the following:
@@ -26,6 +39,7 @@ The functions provided in the package can be directly called from R and Python.
 Instructions how to seamlessly integrate Julia into R session are given in the [JuliaCall](https://cran.r-project.org/web/packages/JuliaCall/index.html) package documentation.
 
 An interface to call Julia directly from Python is provided by the [PyJulia](https://github.com/JuliaPy/pyjulia) package.
+
 
 ### Command Line Interface
 
