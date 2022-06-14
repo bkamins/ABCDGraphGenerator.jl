@@ -15,6 +15,8 @@ max_iter = parse(Int, ARGS[6])
 length(ARGS) >= 7 && Random.seed!(parse(Int, ARGS[7]))
 if length(ARGS) >= 8
     nout = parse(Int, ARGS[8])
+else
+    nout = 0
 end
 
 length(ARGS) >= 9 && @warn "more than 8 parameters passed"

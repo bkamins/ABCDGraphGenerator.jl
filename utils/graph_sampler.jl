@@ -17,7 +17,9 @@ islocal = parse(Bool, ARGS[8])
 
 length(ARGS) >= 9 &&  Random.seed!(parse(Int, ARGS[9]))
 if length(ARGS) >= 10
-    nout = parse(Float64, ARGS[10])
+    nout = parse(Int, ARGS[10])
+else
+    nout = 0
 end
 
 length(ARGS) >= 11 && @warn "more than 10 parameters passed"
