@@ -16,7 +16,7 @@ The package does not export functions and types. The public API is the following
 * `ABCDGraphGenerator.find_v_min`: find the lower truncation given expected value
   and upper truncation of truncated discrete power law distribution
 
-The resason for such split of the functionality is that generation of vertex degrees
+The reason for such split of the functionality is that generation of vertex degrees
 and community sizes is fast, while the generation of the final graph is the most expensive step.
 
 ### Using ABCDGraphGenerator.jl from R and Python
@@ -61,6 +61,9 @@ degreefile = "deg.dat"        # name of file do generate that contains vertex de
 communitysizesfile = "cs.dat" # name of file do generate that contains community sizes
 communityfile = "com.dat"     # name of file do generate that contains assignments of vertices to communities
 networkfile = "edge.dat"      # name of file do generate that contains edges of the generated graph
+nout = "100"                  # number of vertices in graph that are outliers; optional parameter
+                              # if nout is passed and is not zero then we require islocal = "false",
+                              # isCL = "false", and xi (not mu) must be passed
 ```
 In this file all parameters required to generate an ABCD graph and store to on disk are passed.
 Here is an output from an example session using CLI in the ABCD-generation mode using the above file:
