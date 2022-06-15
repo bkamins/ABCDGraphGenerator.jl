@@ -237,8 +237,9 @@ function config_model(clusters, params)
             w[cluster[maxw_idx]] += 1
         end
 
-        if params.hasoutliers && cluster === clusters[1]
-            @assert all(iszero, w_internal[cluster .== 1])
+        if params.hasoutliers && cluster === clusterlist[1]
+            @assert (clusters .== 1) == cluster
+            @assert all(iszero, w_internal[cluster])
         end
         stubs = Int[]
         for i in cluster
@@ -248,7 +249,7 @@ function config_model(clusters, params)
         end
         @assert sum(w_internal[cluster]) == length(stubs)
         @assert iseven(length(stubs))
-        if params.hasoutliers && cluster === clusters[1]
+        if params.hasoutliers && cluster === clusterlist[1]
             @assert isempty(stubs)
         end
         shuffle!(stubs)
@@ -340,6 +341,12 @@ function config_model(clusters, params)
         end
     end
     @assert sum(w) == length(stubs) + sum(w_internal)
+    if params.hasoutliers
+        if 2 * sum(w[clusters .== 1])) > length(stubs)
+            @warn "Because of low value of ξ the outlier nodes form a community. " *
+                  "It is recommended to increase ξ."
+        end
+    end
     shuffle!(stubs)
     if isodd(length(stubs))
         maxi = 1
