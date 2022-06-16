@@ -4,11 +4,13 @@
 A structure holding parameters for ABCD graph generator. Fields:
 * w::Vector{Int}:             a sorted in descending order list of vertex degrees
 * s::Vector{Int}:             a sorted in descending order list of cluster sizes
+                              if hasoutliers then first community is outliers
 * μ::Union{Float64, Nothing}: mixing parameter
 * ξ::Union{Float64, Nothing}: background graph fraction
 * isCL::Bool:                 if `true` a Chung-Lu model is used, otherwise configuration model
 * islocal::Bool:              if `true` mixing parameter restriction is cluster local, otherwise
                               it is only global
+* hasoutliers::Bool:          if first community is outliers
 
 Exactly one of ξ and μ must be passed as `Float64`. Also if `ξ` is passed then
 `islocal` must be `false`.
@@ -22,8 +24,9 @@ struct ABCDParams
     ξ::Union{Float64, Nothing}
     isCL::Bool
     islocal::Bool
+    hasoutliers::Bool
 
-    function ABCDParams(w, s, μ, ξ, isCL, islocal)
+    function ABCDParams(w, s, μ, ξ, isCL, islocal, hasoutliers=false)
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
         if !isnothing(μ)
             0 ≤ μ ≤ 1 || throw(ArgumentError("inconsistent data on μ"))
@@ -42,9 +45,16 @@ struct ABCDParams
             throw(ArgumentError("inconsistent data: only μ or ξ may be provided"))
         end
 
+        if hasoutliers
+            news = copy(s)
+            sort!(@view(news[2:end]), rev=true)
+        else
+            news = sort(s, rev=true)
+        end
+
         new(sort(w, rev=true),
-            sort(s, rev=true),
-            μ, ξ, isCL, islocal)
+            news,
+            μ, ξ, isCL, islocal, hasoutliers)
     end
 end
 
@@ -59,32 +69,66 @@ function populate_clusters(params::ABCDParams)
         mul = 1.0 - params.μ
     else
         n = length(w)
-        ϕ = 1.0 - sum((sl/n)^2 for sl in s)
+        if params.hasoutliers
+            s0 = s[1]
+            n = length(params.w)
+            ϕ = 1.0 - sum((sl/(n-s0))^2 for sl in s[2:end]) * (n-s0)*params.ξ / ((n-s0)*params.ξ + s0)
+        else
+            ϕ = 1.0 - sum((sl/n)^2 for sl in s)
+        end
         mul = 1.0 - params.ξ*ϕ
     end
     @assert length(w) == sum(s)
     @assert 0 ≤ mul ≤ 1
     @assert issorted(w, rev=true)
-    @assert issorted(s, rev=true)
+    if params.hasoutliers
+        @assert issorted(s[2:end], rev=true)
+    else
+        @assert issorted(s, rev=true)
+    end
 
     slots = copy(s)
-    clusters = Int[]
-    j = 0
+    clusters = fill(-1, length(w))
+
+    if params.hasoutliers
+        nout = s[1]
+        n = length(params.w)
+        L = sum(d -> min(1.0, params.ξ * d), params.w)
+        threshold = L + nout - L * nout / n - 1.0
+        idx = findfirst(<=(threshold), params.w)
+        @assert all(i -> params.w[i] <= threshold, idx:n)
+        if length(idx:n) < nout
+            throw(ArgumentError("not enough nodes feasible for classification as outliers"))
+        end
+        tabu = sample(idx:n, nout, replace=false)
+        clusters[tabu] .= 1
+        slots[1] = 0
+        stabu = Set(tabu)
+    else
+        stabu = Set{Int}()
+    end
+
+    j0 = params.hasoutliers ? 1 : 0
+    j = j0
     for (i, vw) in enumerate(w)
+        i in stabu && continue
         while j + 1 ≤ length(s) && mul * vw + 1 ≤ s[j + 1]
             j += 1
         end
-        j == 0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
-        wts = Weights(view(slots, 1:j))
+        j == j0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
+        wts = Weights(view(slots, (j0+1):j))
         wts.sum == 0 && throw(ArgumentError("could not find an empty slot for vertex of weight $vw"))
-        loc = sample(1:j, wts)
-        push!(clusters, loc)
+        loc = sample((j0+1):j, wts)
+        clusters[i] = loc
         slots[loc] -= 1
     end
-    clusters
+    @assert sum(slots) == 0
+    @assert minimum(clusters) == 1
+    return clusters
 end
 
 function CL_model(clusters, params)
+    @assert !hasoutliers
     @assert params.isCL
     w, s, μ = params.w, params.s, params.μ
     cluster_weight = zeros(Int, length(s))
@@ -139,6 +183,7 @@ end
 
 function config_model(clusters, params)
     @assert !params.isCL
+    @assert !params.islocal
     w, s, μ = params.w, params.s, params.μ
 
     cluster_weight = zeros(Int, length(s))
@@ -151,13 +196,19 @@ function config_model(clusters, params)
         maximum(ξl) >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
         w_internal_raw = [w[i] * (1 - ξl[clusters[i]]) for i in axes(w, 1)]
     else
-        if isnothing(params. ξ)
+        if isnothing(params.ξ)
+            @assert !params.hasoutliers
             ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
             ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
         else
             ξg = params.ξ
         end
         w_internal_raw = [w[i] * (1 - ξg) for i in axes(w, 1)]
+        if params.hasoutliers
+            for i in findall(==(1), clusters)
+                w_internal_raw[i] = 0
+            end
+        end
     end
 
     clusterlist = [Int[] for i in axes(s, 1)]
@@ -181,7 +232,15 @@ function config_model(clusters, params)
         end
         maxw = floor(Int, w_internal_raw[cluster[maxw_idx]])
         w_internal[cluster[maxw_idx]] = maxw + (isodd(wsum) ? iseven(maxw) : isodd(maxw))
+        if w_internal[cluster[maxw_idx]] > w[cluster[maxw_idx]]
+            @assert w[cluster[maxw_idx]] + 1 == w_internal[cluster[maxw_idx]]
+            w[cluster[maxw_idx]] += 1
+        end
 
+        if params.hasoutliers && cluster === clusterlist[1]
+            @assert findall(clusters .== 1) == cluster
+            @assert all(iszero, w_internal[cluster])
+        end
         stubs = Int[]
         for i in cluster
             for j in 1:w_internal[i]
@@ -189,6 +248,10 @@ function config_model(clusters, params)
             end
         end
         @assert sum(w_internal[cluster]) == length(stubs)
+        @assert iseven(length(stubs))
+        if params.hasoutliers && cluster === clusterlist[1]
+            @assert isempty(stubs)
+        end
         shuffle!(stubs)
         local_edges = Set{Tuple{Int, Int}}()
         recycle = Tuple{Int,Int}[]
@@ -278,7 +341,27 @@ function config_model(clusters, params)
         end
     end
     @assert sum(w) == length(stubs) + sum(w_internal)
+    if params.hasoutliers
+        if 2 * sum(w[clusters .== 1]) > length(stubs)
+            @warn "Because of low value of ξ the outlier nodes form a community. " *
+                  "It is recommended to increase ξ."
+        end
+    end
     shuffle!(stubs)
+    if isodd(length(stubs))
+        maxi = 1
+        @assert w[stubs[maxi]] > w_internal[stubs[maxi]]
+        for i in 2:length(stubs)
+            si = stubs[i]
+            @assert w[si] > w_internal[si]
+            if w[si] > w[stubs[maxi]]
+                maxi = i
+            end
+        end
+        si = popat!(stubs, maxi)
+        @assert w[si] > w_internal[si]
+        w[si] -= 1
+    end
     global_edges = Set{Tuple{Int, Int}}()
     recycle = Tuple{Int,Int}[]
     for i in 1:2:length(stubs)
@@ -366,7 +449,7 @@ function config_model(clusters, params)
     if !isempty(recycle)
         unresolved_collisions = length(recycle)
         println("Very hard graph. Failed to generate ", unresolved_collisions,
-                "edges; fraction: ", 2 * unresolved_collisions / total_weight)        
+                "edges; fraction: ", 2 * unresolved_collisions / total_weight)
     end
     return edges
 end

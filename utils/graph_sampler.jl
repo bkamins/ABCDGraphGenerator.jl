@@ -1,8 +1,10 @@
 using ABCDGraphGenerator
 using Random
 
-@info "Usage: julia graph_sampler.jl networkfile communityfile degreefile communitysizesfile mu|xi fraction isCL islocal [seed]"
-@info "Example: julia graph_sampler.jl network.dat community.dat degrees.dat community_sizes.dat xi 0.2 true true 42"
+# note that for backward compatibility reasons `[nout]` is an optional parameter
+# that comes last
+@info "Usage: julia graph_sampler.jl networkfile communityfile degreefile communitysizesfile mu|xi fraction isCL islocal [seed] [nout]"
+@info "Example: julia graph_sampler.jl network.dat community.dat degrees.dat community_sizes.dat xi 0.2 true true 42 100"
 
 networkfile = ARGS[1]
 communityfile = ARGS[2]
@@ -13,6 +15,21 @@ fraction = parse(Float64, ARGS[6])
 isCL = parse(Bool, ARGS[7])
 islocal = parse(Bool, ARGS[8])
 
+length(ARGS) >= 9 &&  Random.seed!(parse(Int, ARGS[9]))
+if length(ARGS) >= 10
+    nout = parse(Int, ARGS[10])
+else
+    nout = 0
+end
+
+length(ARGS) >= 11 && @warn "more than 10 parameters passed"
+
+coms = parse.(Int, readlines(communitysizesfile))
+
+if nout > 0
+    nout == coms[1] || throw(ArgumentError("nout does not match first community"))
+end
+
 muxi in ["mu","xi"] || throw(ArgumentError("only mu or xi names are allowed for"))
 μ, ξ = nothing, nothing
 if muxi == "mu"
@@ -20,11 +37,22 @@ if muxi == "mu"
 else
     ξ = fraction
 end
-length(ARGS) == 9 &&  Random.seed!(parse(Int, ARGS[9]))
+
+if isnothing(ξ) && nout > 0
+    throw(ArgumentError("μ is not supported with outliers"))
+end
+
+if islocal && nout > 0
+    throw(ArgumentError("local graph is not supported with outliers"))
+end
+
+if isCL && nout > 0
+    throw(ArgumentError("Chung-Lu graph is not supported with outliers"))
+end
 
 p = ABCDGraphGenerator.ABCDParams(parse.(Int, readlines(degreefile)),
-                                  parse.(Int, readlines(communitysizesfile)),
-                                  μ, ξ, isCL, islocal)
+                                  coms,
+                                  μ, ξ, isCL, islocal, nout > 0)
 
 edges, clusters = ABCDGraphGenerator.gen_graph(p)
 
