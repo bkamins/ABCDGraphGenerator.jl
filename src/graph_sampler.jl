@@ -238,7 +238,7 @@ function config_model(clusters, params)
         end
 
         if params.hasoutliers && cluster === clusterlist[1]
-            @assert (clusters .== 1) == cluster
+            @assert findall(clusters .== 1) == cluster
             @assert all(iszero, w_internal[cluster])
         end
         stubs = Int[]
