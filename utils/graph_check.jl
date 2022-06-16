@@ -8,11 +8,6 @@ community_fname = ARGS[3]
 network_fname = ARGS[4]
 isCL = parse(Bool, ARGS[5])
 
-degrees_fname = "degrees.dat"
-community_sizes_fname = "community_sizes.dat"
-community_fname = "community.dat"
-network_fname = "network.dat"
-
 degrees = parse.(Int, readlines(degrees_fname))
 community_sizes = parse.(Int, readlines(community_sizes_fname))
 community = (x -> parse.(Int, x[2])).(split.(readlines(community_fname)))
