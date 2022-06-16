@@ -4,7 +4,7 @@ using Random
 # note that for backward compatibility reasons `[nout]` is an optional parameter
 # that comes last
 @info "Usage: julia com_sampler.jl filename τ₂ c_min c_max n max_iter [seed] [nout]"
-@info "Example: julia com_sampler.jl community_sizes.dat 2 50 1000 10000 1000 42 40"
+@info "Example: julia com_sampler.jl community_sizes.dat 2 50 1000 10000 1000 42 100"
 
 filename = ARGS[1]
 τ₂ = parse(Float64, ARGS[2])
