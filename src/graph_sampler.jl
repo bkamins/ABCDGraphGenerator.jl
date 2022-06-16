@@ -342,7 +342,7 @@ function config_model(clusters, params)
     end
     @assert sum(w) == length(stubs) + sum(w_internal)
     if params.hasoutliers
-        if 2 * sum(w[clusters .== 1])) > length(stubs)
+        if 2 * sum(w[clusters .== 1]) > length(stubs)
             @warn "Because of low value of ξ the outlier nodes form a community. " *
                   "It is recommended to increase ξ."
         end
