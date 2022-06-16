@@ -205,3 +205,15 @@ Model we need to make sure that each community graph has even sum of degrees.
 This also means that we get a warning that we needed to change by at most 1
 degrees of some nodes in comparison to their generated degrees to meet this
 condition.
+
+### Docker instructions
+
+The repository contains `Makefile` which can be used to simplify docker image and container usage.
+* `make build` - builds the docker image
+* `make save` - saves the docker image in `tar.gz` format
+* `make load` - loads the docker image from `julia_abcd.tar.gz` file from current directory (works properly only if docker image is not present yet)
+* `make run` - runs the docker container ready to receive instructions from CLI (just as in [Command Line Interface section](#command-line-interface)).
+
+Docker caveats:
+* config file should be edited in `./conf/config.yaml` to ensure persistence between docker container sessions (it is a volume mounted by `docker-compose.yaml`).
+* each time when output file is necessary to be specified from CLI, it should be ensured that each output file should be saved to `./output` location, e.g. `julia deg_sampler.jl ./output/degrees.dat 3 5 50 10000 1000 42` (in order to ensure output persistence between docker container sessions).
