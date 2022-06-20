@@ -135,7 +135,6 @@ If `nout` was passed then the first community consists of outliers.
 You can check the generated graph using the `graph_check.jl` file. Here is an example (truncated output):
 ```
 $ julia graph_check.jl degrees.dat community_sizes.dat community.dat network.dat false
-[ Info: Example sage: julia graph_check.jl degrees.dat community_sizes.dat community.dat network.dat [isCL]
 [ Info: Number of nodes: 10000
 [ Info: Number of communities: 69
 [ Info: mean required degree: 8.3672
@@ -173,7 +172,6 @@ $ julia graph_sampler.jl network.dat community.dat degrees.dat community_sizes.d
 └ @ ABCDGraphGenerator graph_sampler.jl:346
 
 $ julia graph_check.jl degrees.dat community_sizes.dat community.dat network.dat false
-[ Info: Example sage: julia graph_check.jl degrees.dat community_sizes.dat community.dat network.dat [isCL]
 [ Info: Number of nodes: 10000
 [ Info: Number of communities: 69
 [ Info: mean required degree: 8.3672

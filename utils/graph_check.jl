@@ -1,12 +1,38 @@
 using Statistics
+using ABCDGraphGenerator: ArgParse
 
-@info "Example sage: julia graph_check.jl degrees.dat community_sizes.dat community.dat network.dat [isCL]"
+function parse_commandline()
+    s = ArgParse.ArgParseSettings()
 
-degrees_fname = ARGS[1]
-community_sizes_fname = ARGS[2]
-community_fname = ARGS[3]
-network_fname = ARGS[4]
-isCL = parse(Bool, ARGS[5])
+    ArgParse.@add_arg_table! s begin
+        "degrees"
+            help = "degrees file"
+            required = true
+        "community_size"
+            help = "community sizes file"
+            required = true
+        "community"
+            help = "community file"
+            required = true
+        "network"
+            help = "network file"
+            required = true
+        "isCL"
+            help = "pass true if graph is CL and false if CM"
+            arg_type = Bool
+            required = true
+    end
+    s.usage = "graph_check.jl [-h] degrees community_size community network isCL"
+    return ArgParse.parse_args(s)
+end
+
+parsed_args = parse_commandline()
+
+degrees_fname = parsed_args["degrees"]
+community_sizes_fname = parsed_args["community_size"]
+community_fname = parsed_args["community"]
+network_fname = parsed_args["network"]
+isCL = parsed_args["isCL"]
 
 degrees = parse.(Int, readlines(degrees_fname))
 community_sizes = parse.(Int, readlines(community_sizes_fname))
@@ -55,9 +81,9 @@ outside_count = [count(!=(community[i]), nei_community[i]) for i in 1:length(deg
 
 internal_frac = internal_count ./ (internal_count .+ outside_count)
 
-@info "mean graph level internal fraction: $(mean(internal_frac))"
+@info "mean graph level proportion of internal edges: $(mean(internal_frac))"
 
-@info "Internal fractions per community:"
+@info "Proportion of internal edges per community:"
 for i in 1:length(community_sizes)
     internal_frac_com = sum(internal_count[community .== i]) ./ sum((internal_count .+ outside_count)[community .== i])
     @info "Community $i has size $(community_sizes[i]) and internal fraction $internal_frac_com"
