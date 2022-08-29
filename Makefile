@@ -1,6 +1,6 @@
 .PHONY: run
 run:
-	docker-compose run --rm app ash
+	docker-compose run --rm app bash
 
 .PHONY: save
 save:

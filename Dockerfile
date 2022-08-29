@@ -1,4 +1,4 @@
-FROM julia:1.7.3-alpine
+FROM julia:1.7.3
 
 WORKDIR /app
 
