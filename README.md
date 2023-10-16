@@ -13,8 +13,6 @@ The package does not export functions and types. The public API is the following
 * `ABCDGraphGenerator.sample_degrees`: sample degrees of vertices following power law
 * `ABCDGraphGenerator.sample_communities`: sample community sizes following power law
 * `ABCDGraphGenerator.get_ev`: get expected value of truncated discrete power law distribution
-* `ABCDGraphGenerator.find_v_min`: find the lower truncation given expected value
-  and upper truncation of truncated discrete power law distribution
 
 The reason for such split of the functionality is that generation of vertex degrees
 and community sizes is fast, while the generation of the final graph is the most expensive step.

@@ -31,28 +31,6 @@ function get_ev(α, v_min, v_max)
 end
 
 """
-    find_v_min(α, v_max, v_ev)
-
-Return the lower truncation given expected value `v_ev` and upper truncation `v_max`
-of truncated discrete power law distribution with exponent `α`.
-"""
-function find_v_min(α, v_max, v_ev)
-    @assert v_ev <= v_max
-    v_min = v_ev
-    cur_err = abs(v_ev, get_ev(α, v_min, v_max))
-    while true
-        v_min == 1 && return 1
-        v_min -= 1
-        next_err = abs(v_ev, get_ev(α, v_min, v_max))
-        if next_err > cur_err
-            return v_min + 1
-        else
-            cur_err = next_err
-        end
-    end
-end
-
-"""
     sample_degrees(τ₁, d_min, d_max, n, max_iter)
 
 Return a vector of length `n` of sampled degrees of vertices following a truncated
