@@ -128,7 +128,7 @@ function populate_clusters(params::ABCDParams)
 end
 
 function CL_model(clusters, params)
-    @assert !hasoutliers
+    @assert !params.hasoutliers
     @assert params.isCL
     w, s, μ = params.w, params.s, params.μ
     cluster_weight = zeros(Int, length(s))
