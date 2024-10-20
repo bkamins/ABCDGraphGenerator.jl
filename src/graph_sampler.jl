@@ -11,11 +11,14 @@ A structure holding parameters for ABCD graph generator. Fields:
 * islocal::Bool:              if `true` mixing parameter restriction is cluster local, otherwise
                               it is only global
 * hasoutliers::Bool:          if first community is outliers
+* η::Float64                  average number of communities a non-outlier node is part of; default 1
 
 Exactly one of ξ and μ must be passed as `Float64`. Also if `ξ` is passed then
 `islocal` must be `false`.
 
 The base ABCD graph is generated when ξ is passed and `isCL` is set to `false`.
+
+If η is set to a value greater than 1 then `isCL` must be `false` and `islocal` must be `false`.
 """
 struct ABCDParams
     w::Vector{Int}
@@ -25,8 +28,9 @@ struct ABCDParams
     isCL::Bool
     islocal::Bool
     hasoutliers::Bool
+    η::Float64
 
-    function ABCDParams(w, s, μ, ξ, isCL, islocal, hasoutliers=false)
+    function ABCDParams(w, s, μ, ξ, isCL, islocal, hasoutliers=false, η=1.0)
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
         if !isnothing(μ)
             0 ≤ μ ≤ 1 || throw(ArgumentError("inconsistent data on μ"))
@@ -52,9 +56,22 @@ struct ABCDParams
             news = sort(s, rev=true)
         end
 
+        if η < 1
+            throw(ArgumentError("η must be greater or equal than 1"))
+        end
+
+        if η > 1 && (isCL || islocal)
+            throw(ArgumentError("if η > 1 then islocal must be false and isCL must be false"))
+        end
+
+        largest = news[1 + hasoutliers] # size of largest non-outlier community
+        if η * largest > length(w) - (hasoutliers ? news[1] : 0)
+            throw(ArgumentError("η must be small enough so that overlapping communities are not too big"))
+        end
+
         new(sort(w, rev=true),
             news,
-            μ, ξ, isCL, islocal, hasoutliers)
+            μ, ξ, isCL, islocal, hasoutliers, η)
     end
 end
 
