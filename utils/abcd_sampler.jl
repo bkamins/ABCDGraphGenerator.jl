@@ -45,11 +45,11 @@ c_min = parse(Int, conf["c_min"])
 c_max = parse(Int, conf["c_max"])
 c_max_iter = parse(Int, conf["c_max_iter"])
 @info "Expected value of community size: $(ABCDGraphGenerator.get_ev(τ₂, c_min, c_max))"
-coms = ABCDGraphGenerator.sample_communities(τ₂, ceil(Int, c_min/eta), floor(Int, c_max/eta), n, c_max_iter)
+coms = ABCDGraphGenerator.sample_communities(τ₂, ceil(Int, c_min / η), floor(Int, c_max / η), n, c_max_iter)
 @assert sum(coms) == n
 pushfirst!(coms, nout)
 
-p = ABCDGraphGenerator.ABCDParams(degs, coms, ξ, eta)
+p = ABCDGraphGenerator.ABCDParams(degs, coms, ξ, η)
 edges, clusters = ABCDGraphGenerator.gen_graph(p)
 open(conf["networkfile"], "w") do io
     for (a, b) in sort!(collect(edges))
@@ -63,18 +63,16 @@ open(conf["communityfile"], "w") do io
 end
 
 open(conf["communitysizesfile"], "w") do io
-    comm_count = zero(Int, coms)
+    comm_count = zeros(Int, length(coms))
     for c in clusters
         @assert length(c) > 0
-        if length(c) == 1
-            @assert c[1] == 1
-        else
-            @assert minimum(c) > 1
+        if 1 in c
+            @assert length(c) == 1
         end
         for v in c
             comm_count[v] += 1
         end
     end
-    println("eta is $η and empirically we have scaling of: ", extrema(comm_count ./ comm))
+    println("eta is $η and empirically we have scaling of: ", extrema(comm_count[2:end] ./ coms[2:end]))
     foreach(d -> println(io, d), comm_count)
 end
