@@ -37,15 +37,19 @@ function assign_points(x, c, p)
     return res
 end
 
-function populate_overlapping_clusters(coms::Vector{Int}, η::Flaot64, hasoutliers::Bool)
-    true_coms = hasoutliers ? coms[2:end] : true_coms = coms
-    grow_coms = [randround(s * η) for s in true_coms]
-    p = randperm(length(true_coms))
+# note that this function returns node numbers from 1 to number_of_non_outlier_nodes
+# for each community we get a set of nodes assigned to it
+function populate_overlapping_clusters(coms::Vector{Int}, η::Float64)
+    true_coms = coms[2:end] # we are interested only in non-outlier communities
+    grow_coms = [randround(s * η) for s in true_coms] # this is a target size of communities, as coms is primary community sizes
+    p = randperm(length(true_coms)) # order in which communities are handled
     n = sum(true_coms)
     x = sample_points(n)
     a = assign_points(x, true_coms, p)
     @assert length.(a) == true_coms
+    @assert sum(length, a) == sum(true_coms)
 
+    # below we grow communities
     @assert length(a) == length(grow_coms)
     for (com, target) in zip(a, grow_coms)
         community_center = vec(mean(x[com], dims=1))
@@ -65,5 +69,6 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Flaot64, hasoutlie
         end
     end
     @assert length.(a) == grow_coms
-    return a
+    @assert sum(length, a) == sum(grow_coms)
+    return [Set(c) for c in a]
 end

@@ -9,32 +9,24 @@ filename = ARGS[1]
 conf = Pkg.TOML.parsefile(filename)
 isempty(conf["seed"]) || Random.seed!(parse(Int, conf["seed"]))
 
-nout = haskey(conf, "nout") ? parse(Int, conf["nout"]) : 0
-
-μ = haskey(conf, "mu") ? parse(Float64, conf["mu"]) : nothing
-ξ = haskey(conf, "xi") ? parse(Float64, conf["xi"]) : nothing
-if !(isnothing(μ) || isnothing(ξ))
-    throw(ArgumentError("inconsistent data: only μ or ξ may be provided"))
+nout = parse(Int, conf["nout"])
+if nout < 0
+    throw(ArgumentError("nout cannot be negative"))
 end
 
-if !isnothing(μ) && nout > 0
-    throw(ArgumentError("μ is not supported with outliers"))
+ξ = parse(Float64, conf["xi"])
+η = parse(Float64, conf["eta"])
+if η < 1
+    throw(ArgumentError("eta must be at least 1"))
 end
 
 n = parse(Int, conf["n"])
+if n < 0
+    throw(ArgumentError("n cannot be negative"))
+end
 
 if nout > n
     throw(ArgumentError("number of outliers cannot be larger than graph size"))
-end
-
-islocal = haskey(conf, "islocal") ? parse(Bool, conf["islocal"]) : false
-if islocal && nout > 0
-    throw(ArgumentError("local graph is not supported with outliers"))
-end
-
-isCL = parse(Bool, conf["isCL"])
-if isCL && nout > 0
-    throw(ArgumentError("Chung-Lu graph is not supported with outliers"))
 end
 
 # in what follows n is number of non-outlier nodes
@@ -53,13 +45,11 @@ c_min = parse(Int, conf["c_min"])
 c_max = parse(Int, conf["c_max"])
 c_max_iter = parse(Int, conf["c_max_iter"])
 @info "Expected value of community size: $(ABCDGraphGenerator.get_ev(τ₂, c_min, c_max))"
-coms = ABCDGraphGenerator.sample_communities(τ₂, c_min, c_max, n, c_max_iter)
-if nout > 0
-    pushfirst!(coms, nout)
-end
-open(io -> foreach(d -> println(io, d), coms), conf["communitysizesfile"], "w")
+coms = ABCDGraphGenerator.sample_communities(τ₂, ceil(Int, c_min/eta), floor(Int, c_max/eta), n, c_max_iter)
+@assert sum(coms) == n
+pushfirst!(coms, nout)
 
-p = ABCDGraphGenerator.ABCDParams(degs, coms, μ, ξ, isCL, islocal, nout > 0)
+p = ABCDGraphGenerator.ABCDParams(degs, coms, ξ, eta)
 edges, clusters = ABCDGraphGenerator.gen_graph(p)
 open(conf["networkfile"], "w") do io
     for (a, b) in sort!(collect(edges))
@@ -70,4 +60,21 @@ open(conf["communityfile"], "w") do io
     for (i, c) in enumerate(clusters)
         println(io, i, "\t", c)
     end
+end
+
+open(conf["communitysizesfile"], "w") do io
+    comm_count = zero(Int, coms)
+    for c in clusters
+        @assert length(c) > 0
+        if length(c) == 1
+            @assert c[1] == 1
+        else
+            @assert minimum(c) > 1
+        end
+        for v in c
+            comm_count[v] += 1
+        end
+    end
+    println("eta is $η and empirically we have scaling of: ", extrema(comm_count ./ comm))
+    foreach(d -> println(io, d), comm_count)
 end
