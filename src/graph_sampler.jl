@@ -22,11 +22,11 @@ struct ABCDParams
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
         length(s) < 2 && throw(ArgumentError("no communities requested"))
         s[1] >= 0 || throw(ArgumentError("negative count of outliers passed"))
-        all(>(0), @view(news[2:end])) || throw(ArgumentError("all community sizes must be positive"))
         0 ≤ ξ ≤ 1 || throw(ArgumentError("inconsistent data ξ"))
         η < 1 && throw(ArgumentError("η must be greater or equal than 1"))
 
         news = copy(s)
+        all(>(0), @view(news[2:end])) || throw(ArgumentError("all community sizes must be positive"))
         sort!(@view(news[2:end]), rev=true)
 
         largest = news[2] # size of largest non-outlier community
@@ -78,7 +78,7 @@ function populate_clusters(params::ABCDParams)
     # handle normal communities
     # note that numbers assigned to communities are from 1 to sum(slots[2:end]) so remapping is needed later
     slots_less_1 = slots[2:end]
-    cluster_assignments = populate_overlapping_clusters(slots_less_1, params.η)
+    cluster_assignments = populate_overlapping_clusters(slots, params.η)
     ηu = [count(c -> i in c, cluster_assignments) for i in 1:sum(slots_less_1)] # count in how many communities each number belongs
     @assert minimum(ηu) >= 1
     min_com = [minimum(length(c) - 1 for c in cluster_assignments if i in c) for i in 1:sum(slots_less_1)] # minimum size of a community less one for each number
@@ -192,14 +192,16 @@ function config_model(clusters, params)
     w, s, ξ = params.w, params.s, params.ξ
 
     @assert iseven(sum(w))
-    w_internal_raw = randround.([w[i] * (1 - g) for i in axes(w, 1)])
+    w_internal_raw = randround.([w[i] * (1 - ξ) for i in axes(w, 1)])
     for i in findall(==([1]), clusters)
         w_internal_raw[i] = 0
     end
 
     w_external = w - w_internal_raw
 
-    clusterlist = [Int[] for i in maximum(c -> maximum(c), clusters)] # list of nodes in each cluster
+    clusterlist = [Int[] for i in 1:maximum(c -> maximum(c), clusters)] # list of nodes in each cluster
+    @show length(clusters)
+    @show length(clusterlist)
     for i in axes(clusters, 1)
         c = clusters[i]
         for x in c
@@ -207,7 +209,7 @@ function config_model(clusters, params)
         end
     end
 
-    w_internal_comm = [zeros(Int, length(w_internal_raw)) for i in 1:length(cluster_list)] # this holds internal degree of each community
+    w_internal_comm = [zeros(Int, length(w_internal_raw)) for i in 1:length(clusterlist)] # this holds internal degree of each community
 
     for i in axes(clusters, 1)
         wi = w_internal_raw[i]
@@ -216,7 +218,7 @@ function config_model(clusters, params)
         extra = wi - nc * share
         z = shuffle(1:nc)[1:extra]
         for j in 1:nc
-            w_internal_comm[clusters[i][j]] = share + (j in z)
+            w_internal_comm[clusters[i][j]][i] = share + (j in z)
         end
     end
 
@@ -240,8 +242,8 @@ function config_model(clusters, params)
 
     idxs_com = 0
     for w_int in w_internal_comm
-        idx_com += 1
-        if idx_com == 1 # outlier community
+        idxs_com += 1
+        if idxs_com == 1 # outlier community
             @assert sum(w_int) == 0
         else
             g, s = generate_initial_graph(w_int)
@@ -250,7 +252,8 @@ function config_model(clusters, params)
         end
     end
 
-    let g, s = generate_initial_graph(w_external)
+    let
+        g, s = generate_initial_graph(w_external)
         push!(partial_graphs, g)
         append!(unused_stubs, s)
     end
@@ -277,8 +280,8 @@ function config_model(clusters, params)
         while true
             shuffle!(unused_stubs)
             recycle = Int[]
-            for i in 1:2:length(stubs)
-                e = minmax(stubs[i], stubs[i+1])
+            for i in 1:2:length(unused_stubs)
+                e = minmax(unused_stubs[i], unused_stubs[i+1])
                 if (e[1] == e[2]) || (e in edges)
                     push!(recycle, e[1], e[2])
                 else
@@ -292,6 +295,7 @@ function config_model(clusters, params)
             last_recycle_len = length(recycle)
             unused_stubs = recycle
             @assert iseven(length(recycle))
+            isempty(recycle) && break
         end
     end
 

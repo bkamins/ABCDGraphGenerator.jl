@@ -18,7 +18,6 @@ function assign_points(x, c, p)
     res = Vector{Vector{Int}}(UndefInitializer(), length(c))
     for idx in p
         com = c[idx]
-        @show com
         ind = argmax(dist)
         ref = x[ind, :]
         dist_c = [sum(x -> x^2, (r - ref)) for r in eachrow(x)]
@@ -33,7 +32,6 @@ function assign_points(x, c, p)
     @assert length(all_idxs) == 0
     @assert length(dist) == 0
     @assert sort(union(res...)) == 1:sum(c)
-    @assert all(isassigned(Ref(res), 1:length(res)))
     return res
 end
 
@@ -70,5 +68,6 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64)
     end
     @assert length.(a) == grow_coms
     @assert sum(length, a) == sum(grow_coms)
+    @assert all(allunique(c) for c in a)
     return [Set(c) for c in a]
 end
