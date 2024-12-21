@@ -279,7 +279,7 @@ function config_model(clusters, params)
             from_recycle = 2 * length(recycle) / length(stubs)
             success = false
             for _ in 1:2:length(stubs)
-                p2 = if rand() < from_recycle
+                p2 = if rand() < from_recycle || isempty(local_edges)
                     used_recycle = true
                     recycle_idx = rand(axes(recycle, 1))
                     recycle[recycle_idx]
