@@ -118,6 +118,11 @@ function populate_clusters(params::ABCDParams)
             end
         end
 
+        if !isempty(extra_large)
+            @warn "Warning: $(length(extra_large)) nodes had too large degree to fit them into a community." *
+                  " They are treated as outliers"
+        end
+
         tabu = xnout == 0 ? Int[] : sample(idx:n, xnout, replace=false)
         append!(tabu, extra_large)
         sort!(tabu)
