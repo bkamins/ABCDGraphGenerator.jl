@@ -100,7 +100,27 @@ function populate_clusters(params::ABCDParams)
         if length(idx:n) < nout
             throw(ArgumentError("not enough nodes feasible for classification as outliers"))
         end
-        tabu = sample(idx:n, nout, replace=false)
+
+        # handle the case of node being too heavy to fit into the largest community
+        extra_large = Int[]
+        xnout = nout
+        while xnout > 0
+            if mul * params.w[idx] + 1 > s[2] # note that s[1] is outliers so s[2] is largest non-outlier community
+                push!(extra_large, idx)
+                idx += 1
+                xnout -= 1
+            else
+                 break
+            end
+            if idx > n
+                xnout > 0 && throw(ArgumentError("not enough nodes feasible for classification as outliers"))
+                break
+            end
+        end
+
+        tabu = xnout == 0 ? Int[] : sample(idx:n, xnout, replace=false)
+        append!(tabu, extra_large)
+        sort!(tabu)
         clusters[tabu] .= 1
         slots[1] = 0
         stabu = Set(tabu)
