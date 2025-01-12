@@ -50,7 +50,7 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64)
     # below we grow communities
     @assert length(a) == length(grow_coms)
     for (com, target) in zip(a, grow_coms)
-        community_center = vec(mean(x[com], dims=1))
+        community_center = vec(mean(x[com, :], dims=1))
         distances = [sum((v .- community_center) .^ 2) for v in eachrow(x)]
         ordering = sortperm(distances)
         com_set = Set(com)
