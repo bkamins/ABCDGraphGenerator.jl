@@ -200,8 +200,6 @@ function config_model(clusters, params)
     w_external = w - w_internal_raw
 
     clusterlist = [Int[] for i in 1:maximum(c -> maximum(c), clusters)] # list of nodes in each cluster
-    @show length(clusters)
-    @show length(clusterlist)
     for i in axes(clusters, 1)
         c = clusters[i]
         for x in c
