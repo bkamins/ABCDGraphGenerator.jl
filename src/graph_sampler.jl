@@ -110,18 +110,42 @@ function populate_clusters(params::ABCDParams)
 
     j0 = params.hasoutliers ? 1 : 0
     j = j0
+    tmp_wsum = 0
+    bad_weights = Int[]
     for (i, vw) in enumerate(w)
         i in stabu && continue
+
+        # make sure we have at least one assignment of node to cluster
+        while j + 1 ≤ length(s) && tmp_wsum == 0
+            if mul * vw + 1 > s[j+1]
+                push!(bad_weights, vw)
+            end
+            j += 1
+            tmp_wsum += slots[j]
+        end
+
         while j + 1 ≤ length(s) && mul * vw + 1 ≤ s[j + 1]
             j += 1
+            tmp_wsum += slots[j]
         end
+
+        # these errors should not happen but keep them for safety reasons
         j == j0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
         wts = Weights(view(slots, (j0+1):j))
         wts.sum == 0 && throw(ArgumentError("could not find an empty slot for vertex of weight $vw"))
+        @assert wts.sum == tmp_wsum
+
         loc = sample((j0+1):j, wts)
         clusters[i] = loc
         slots[loc] -= 1
+        tmp_wsum -= 1
     end
+
+    if !isempty(bad_weights)
+        @warn "Could not find a large enough cluster for vertices of weights:\n$bad_weights.\n" *
+              "Resulting ξ might be slightly biased."
+    end
+
     @assert sum(slots) == 0
     @assert minimum(clusters) == 1
     return clusters
