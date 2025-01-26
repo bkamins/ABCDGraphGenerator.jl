@@ -271,33 +271,55 @@ function config_model(clusters, params)
     @assert sum(w) == length(edges) * 2 + length(unused_stubs)
     @assert iseven(length(unused_stubs))
 
-    last_recycle_len = length(unused_stubs)
-    if length(unused_stubs) > 0
-        println("Duplicates or self loops generated in total number of $(div(length(unused_stubs), 2)). Fixing.")
-
-        while true
-            shuffle!(unused_stubs)
-            recycle = Int[]
-            for i in 1:2:length(unused_stubs)
-                e = minmax(unused_stubs[i], unused_stubs[i+1])
-                if (e[1] == e[2]) || (e in edges)
-                    push!(recycle, e[1], e[2])
-                else
-                    push!(edges, e)
-                end
+    recycle = [(unused_stubs[i], unused_stubs[i+1]) for i in 1:2:length(unused_stubs)]
+    shuffle!(recycle)
+    while !isempty(recycle)
+        p1 = popfirst!(recycle)
+        from_recycle = length(recycle) / length(edges)
+        success = false
+        for _ in 1:length(edges)
+            p2 = if rand() < from_recycle
+                used_recycle = true
+                recycle_idx = rand(axes(recycle, 1))
+                recycle[recycle_idx]
+            else
+                used_recycle = false
+                rand(edges)
             end
-            if length(recycle) == last_recycle_len # no success in generating new feasible edges
-                println("Could not fix creation of $(div(last_recycle_len, 2)) edges. Giving up.")
+            if rand() < 0.5
+                newp1 = minmax(p1[1], p2[1])
+                newp2 = minmax(p1[2], p2[2])
+            else
+                newp1 = minmax(p1[1], p2[2])
+                newp2 = minmax(p1[2], p2[1])
+            end
+            if newp1 == newp2
+                good_choice = false
+            elseif (newp1[1] == newp1[2]) || (newp1 in edges)
+                good_choice = false
+            elseif (newp2[1] == newp2[2]) || (newp2 in edges)
+                good_choice = false
+            else
+                good_choice = true
+            end
+            if good_choice
+                if used_recycle
+                    recycle[recycle_idx], recycle[end] = recycle[end], recycle[recycle_idx]
+                    pop!(recycle)
+                else
+                    pop!(edges, p2)
+                end
+                success = true
+                push!(edges, newp1)
+                push!(edges, newp2)
                 break
             end
-            last_recycle_len = length(recycle)
-            unused_stubs = recycle
-            @assert iseven(length(recycle))
-            isempty(recycle) && break
         end
+        success || push!(recycle, p1)
     end
 
-    @assert sum(w) == length(edges) * 2 + last_recycle_len
+    @assert isempty(recycle)
+    @assert sum(w) == 2 * length(edges)
     return edges
 end
 
