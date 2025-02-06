@@ -16,14 +16,16 @@ struct ABCDParams
     s::Vector{Int}
     ξ::Float64
     η::Float64
+    d::Int
 
-    function ABCDParams(w::Vector{Int}, s::Vector{Int}, ξ::Float64, η::Float64)
+    function ABCDParams(w::Vector{Int}, s::Vector{Int}, ξ::Float64, η::Float64, d::Int)
         all(>(0), w) || throw(ArgumentError("all degrees must be positive"))
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
         length(s) < 2 && throw(ArgumentError("no communities requested"))
         s[1] >= 0 || throw(ArgumentError("negative count of outliers passed"))
         0 ≤ ξ ≤ 1 || throw(ArgumentError("inconsistent data ξ"))
         η < 1 && throw(ArgumentError("η must be greater or equal than 1"))
+        d < 1 && throw(ArgumentError("d must be greater or equal than 1"))
 
         news = copy(s)
         all(>(0), @view(news[2:end])) || throw(ArgumentError("all community sizes must be positive"))
@@ -34,7 +36,7 @@ struct ABCDParams
             throw(ArgumentError("η must be small enough so that overlapping communities are not too big"))
         end
 
-        new(sort(w, rev=true), news, ξ, η)
+        new(sort(w, rev=true), news, ξ, η, d)
     end
 end
 
@@ -78,7 +80,7 @@ function populate_clusters(params::ABCDParams)
     # handle normal communities
     # note that numbers assigned to communities are from 1 to sum(slots[2:end]) so remapping is needed later
     slots_less_1 = slots[2:end]
-    cluster_assignments = populate_overlapping_clusters(slots, params.η)
+    cluster_assignments = populate_overlapping_clusters(slots, params.η, params.d)
     ηu = [count(c -> i in c, cluster_assignments) for i in 1:sum(slots_less_1)] # count in how many communities each number belongs
     @assert minimum(ηu) >= 1
     min_com = [minimum(length(c) - 1 for c in cluster_assignments if i in c) for i in 1:sum(slots_less_1)] # minimum size of a community less one for each number

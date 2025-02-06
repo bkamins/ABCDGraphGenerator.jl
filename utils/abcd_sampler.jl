@@ -20,6 +20,11 @@ if η < 1
     throw(ArgumentError("eta must be at least 1"))
 end
 
+d = parse(Float64, conf["d"])
+if d < 1
+    throw(ArgumentError("d must be at least 1"))
+end
+
 n = parse(Int, conf["n"])
 if n < 0
     throw(ArgumentError("n cannot be negative"))
@@ -49,7 +54,7 @@ coms = ABCDGraphGenerator.sample_communities(τ₂, ceil(Int, c_min / η), floor
 @assert sum(coms) == n
 pushfirst!(coms, nout)
 
-p = ABCDGraphGenerator.ABCDParams(degs, coms, ξ, η)
+p = ABCDGraphGenerator.ABCDParams(degs, coms, ξ, η, d)
 edges, clusters = ABCDGraphGenerator.gen_graph(p)
 open(conf["networkfile"], "w") do io
     for (a, b) in sort!(collect(edges))

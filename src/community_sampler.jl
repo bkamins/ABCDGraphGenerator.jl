@@ -1,14 +1,14 @@
 using Random
 using StatsBase
 
-function sample_points(n)
-    points = randn(n, 2)
+function sample_points(n, d)
+    points = randn(n, d)
     points ./= sqrt.(sum(x -> x^2, points, dims=2))
-    points .*= rand(n) .^ 0.5
+    points .*= rand(n) .^ (1/d)
     return points
 end
 
-function assign_points(x, c, p)
+function assign_points(x, c, p, d)
     @assert ndims(x) == 2
     @assert sum(c) == size(x, 1)
     @assert length(c) == length(p)
@@ -37,13 +37,14 @@ end
 
 # note that this function returns node numbers from 1 to number_of_non_outlier_nodes
 # for each community we get a set of nodes assigned to it
-function populate_overlapping_clusters(coms::Vector{Int}, η::Float64)
+function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
+    @assert 1 <= d
     true_coms = coms[2:end] # we are interested only in non-outlier communities
     grow_coms = [randround(s * η) for s in true_coms] # this is a target size of communities, as coms is primary community sizes
     p = randperm(length(true_coms)) # order in which communities are handled
     n = sum(true_coms)
-    x = sample_points(n)
-    a = assign_points(x, true_coms, p)
+    x = sample_points(n, d)
+    a = assign_points(x, true_coms, p, d)
     @assert length.(a) == true_coms
     @assert sum(length, a) == sum(true_coms)
 
