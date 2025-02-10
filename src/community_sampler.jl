@@ -8,7 +8,7 @@ function sample_points(n, d)
     return points
 end
 
-function assign_points(x, c, p, d)
+function assign_points(x, c, p)
     @assert ndims(x) == 2
     @assert sum(c) == size(x, 1)
     @assert length(c) == length(p)
@@ -44,7 +44,7 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
     p = randperm(length(true_coms)) # order in which communities are handled
     n = sum(true_coms)
     x = sample_points(n, d)
-    a = assign_points(x, true_coms, p, d)
+    a = assign_points(x, true_coms, p)
     @assert length.(a) == true_coms
     @assert sum(length, a) == sum(true_coms)
 
