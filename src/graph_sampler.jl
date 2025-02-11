@@ -17,8 +17,9 @@ struct ABCDParams
     ξ::Float64
     η::Float64
     d::Int
+    x::Float64
 
-    function ABCDParams(w::Vector{Int}, s::Vector{Int}, ξ::Float64, η::Float64, d::Int)
+    function ABCDParams(w::Vector{Int}, s::Vector{Int}, ξ::Float64, η::Float64, d::Int, x::Float64)
         all(>(0), w) || throw(ArgumentError("all degrees must be positive"))
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
         length(s) < 2 && throw(ArgumentError("no communities requested"))
@@ -36,7 +37,7 @@ struct ABCDParams
             throw(ArgumentError("η must be small enough so that overlapping communities are not too big"))
         end
 
-        new(sort(w, rev=true), news, ξ, η, d)
+        new(sort(w, rev=true), news, ξ, η, d, x)
     end
 end
 
@@ -85,17 +86,27 @@ function populate_clusters(params::ABCDParams)
     @assert minimum(ηu) >= 1
     min_com = [minimum(length(c) - 1 for c in cluster_assignments if i in c) for i in 1:sum(slots_less_1)] # minimum size of a community less one for each number
     max_degree = (ηu .* min_com) / mul
+    ηus = ηu .^ params.x
 
     for (i, vw) in enumerate(w)
         i in stabu && continue # skip nodes in outlier community
         good_idxs = findall(md -> vw <= md, max_degree) # later make it faster, but for now leave a simple implementation
         isempty(good_idxs) && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw with index $i"))
-        chosen_idx = rand(good_idxs)
+        good_idxs_weights = Weights(ηus[good_idxs])  # later make it faster, but for now leave a simple implementation
+        chosen_idx = sample(good_idxs, good_idxs_weights)
         clusters[i] = findall(c -> chosen_idx in c, cluster_assignments) .+ 1 # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
         max_degree[chosen_idx] = -1 # make sure we will not use chosen_idx later; note that this needs refactoring if the code is optimized for speed later
     end
 
     @assert sum(length, clusters) == s0 + sum(length, cluster_assignments)
+
+    nonoutliers = setdiff(1:length(w), tabu)
+    wn = w[nonoutliers]
+    cnl = length.(clusters[nonoutliers])
+    @info "Correlation between node degree and number of communities it belongs to: $(cor(wn, cnl))" # display degree-community count correlation for non-outliers
+    for x in sort(unique(cnl))
+        println("community count $x: mean degree $(mean(wn[cnl .== x])) ($(sum(cnl .== x)) nodes)")
+    end
 
     return clusters # which clusters a given node is assigned to
 end

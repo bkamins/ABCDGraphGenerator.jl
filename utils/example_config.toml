@@ -12,6 +12,7 @@ c_max_iter = "1000"           # maximum number of iterations for sampling cluste
 xi = "0.2"                    # fraction of edges to fall in background graph
 eta = "1.5"                   # average number of community per community node
 d = 2                         # dimensionality of latent space
+x = 0.0                       # exponent of association between degree and number of communities node is in
 degreefile = "deg.dat"        # name of file do generate that contains vertex degrees
 communitysizesfile = "cs.dat" # name of file do generate that contains community sizes
 communityfile = "com.dat"     # name of file do generate that contains assignments of vertices to communities
