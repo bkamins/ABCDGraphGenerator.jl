@@ -8,6 +8,8 @@ A structure holding parameters for ABCD graph generator. Fields:
                     cluster sizes must be for primary community
 * ξ::Float64:       background graph fraction
 * η::Float64:       average number of communities a non-outlier node is part of; default 1
+* d::Int:           dimensionality of latent space
+* ρ::Float64:       correlation between degree and number of communities node is in
 
 The graph will be generated using configuration model global approach.
 """
@@ -17,9 +19,9 @@ struct ABCDParams
     ξ::Float64
     η::Float64
     d::Int
-    x::Float64
+    ρ::Float64
 
-    function ABCDParams(w::Vector{Int}, s::Vector{Int}, ξ::Float64, η::Float64, d::Int, x::Float64)
+    function ABCDParams(w::Vector{Int}, s::Vector{Int}, ξ::Float64, η::Float64, d::Int, ρ::Float64)
         all(>(0), w) || throw(ArgumentError("all degrees must be positive"))
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
         length(s) < 2 && throw(ArgumentError("no communities requested"))
@@ -37,7 +39,7 @@ struct ABCDParams
             throw(ArgumentError("η must be small enough so that overlapping communities are not too big"))
         end
 
-        new(sort(w, rev=true), news, ξ, η, d, x)
+        new(sort(w, rev=true), news, ξ, η, d, ρ)
     end
 end
 
@@ -86,29 +88,72 @@ function populate_clusters(params::ABCDParams)
     @assert minimum(ηu) >= 1
     min_com = [minimum(length(c) - 1 for c in cluster_assignments if i in c) for i in 1:sum(slots_less_1)] # minimum size of a community less one for each number
     max_degree = (ηu .* min_com) / mul
-    ηus = ηu .^ params.x
-
-    for (i, vw) in enumerate(w)
-        i in stabu && continue # skip nodes in outlier community
-        good_idxs = findall(md -> vw <= md, max_degree) # later make it faster, but for now leave a simple implementation
-        isempty(good_idxs) && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw with index $i"))
-        good_idxs_weights = Weights(ηus[good_idxs])  # later make it faster, but for now leave a simple implementation
-        chosen_idx = sample(good_idxs, good_idxs_weights)
-        clusters[i] = findall(c -> chosen_idx in c, cluster_assignments) .+ 1 # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
-        max_degree[chosen_idx] = -1 # make sure we will not use chosen_idx later; note that this needs refactoring if the code is optimized for speed later
-    end
-
-    @assert sum(length, clusters) == s0 + sum(length, cluster_assignments)
-
     nonoutliers = setdiff(1:length(w), tabu)
     wn = w[nonoutliers]
-    cnl = length.(clusters[nonoutliers])
-    @info "Correlation between node degree and number of communities it belongs to: $(cor(wn, cnl))" # display degree-community count correlation for non-outliers
-    for x in sort(unique(cnl))
-        println("community count $x: mean degree $(mean(wn[cnl .== x])) ($(sum(cnl .== x)) nodes)")
+    min_cor = ceil(cor(sort(ηu, rev=true), sort(wn)); digits=2)
+    max_cor = floor(cor(sort(ηu), sort(wn)); digits=2)
+    @info "Possible range of correlation between node degree and number of communities it belongs to" *
+          " is from $min_cor to $max_cor (user asked for $(params.ρ))"
+
+    ref_clusters = deepcopy(clusters)
+    ref_max_degree = deepcopy(max_degree)
+
+    approx_rho = round(params.ρ; digits=2)
+
+    if approx_rho ≈ 0.0
+        lo_x = 0.0
+        hi_x = 0.0
+    elseif approx_rho <= min_cor
+        @warn "expected ρ is too low; setting to approximately $min_cor"
+        lo_x = -10.0
+        hi_x = -10.0
+    elseif approx_rho > max_cor
+        @warn "expected ρ is too high; setting to approximately $max_cor"
+        lo_x = 10.0
+        hi_x = 10.0
+    elseif approx_rho > 0
+        lo_x = 0.0
+        hi_x = 10.0
+    else
+        @assert approx_rho < 0
+        lo_x = -10.0
+        hi_x = 0.0
     end
 
-    return clusters # which clusters a given node is assigned to
+    while true
+        current_x = (lo_x + hi_x) / 2.0
+        ηus = ηu .^ current_x
+
+        for (i, vw) in enumerate(w)
+            i in stabu && continue # skip nodes in outlier community
+            good_idxs = findall(md -> vw <= md, max_degree) # later make it faster, but for now leave a simple implementation
+            isempty(good_idxs) && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw with index $i"))
+            good_idxs_weights = Weights(ηus[good_idxs])  # later make it faster, but for now leave a simple implementation
+            chosen_idx = sample(good_idxs, good_idxs_weights)
+            clusters[i] = findall(c -> chosen_idx in c, cluster_assignments) .+ 1 # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
+            max_degree[chosen_idx] = -1 # make sure we will not use chosen_idx later; note that this needs refactoring if the code is optimized for speed later
+        end
+        @assert sum(length, clusters) == s0 + sum(length, cluster_assignments)
+        cnl = length.(clusters[nonoutliers])
+        cur_cor = cor(wn, cnl)
+        # @show cur_cor, lo_x, hi_x, current_x # re-enable this line for diagnostic output
+        if cur_cor > approx_rho
+            hi_x = current_x
+        else
+            lo_x = current_x
+        end
+
+        if (abs(cur_cor - params.ρ) < 0.01) || (hi_x - lo_x < 0.001)
+            @info "Achieved correlation between node degree and number of communities it belongs to: $(cor(wn, cnl))" # display degree-community count correlation for non-outliers
+            println("Mean degree distribution:")
+            for x in sort(unique(cnl))
+                println("community count $x: mean degree $(mean(wn[cnl .== x])) ($(sum(cnl .== x)) nodes)")
+            end
+            return clusters # which clusters a given node is assigned to
+        end
+        clusters = deepcopy(ref_clusters)
+        max_degree = deepcopy(ref_max_degree)
+    end
 end
 
 function generate_initial_graph(weights::Vector{Int})
