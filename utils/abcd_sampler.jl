@@ -20,7 +20,7 @@ if η < 1
     throw(ArgumentError("eta must be at least 1"))
 end
 
-d = parse(Float64, conf["d"])
+d = parse(Int, conf["d"])
 if d < 1
     throw(ArgumentError("d must be at least 1"))
 end
