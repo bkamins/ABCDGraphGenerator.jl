@@ -288,8 +288,8 @@ function config_model(clusters, params)
     end
 
     @assert sum(w_internal_comm) + w_external == w
-    @assert iseven(length(w_external))
-    @assert all(x -> iseven(length(x)), w_internal_comm)
+    @assert iseven(sum(w_external))
+    @assert all(x -> iseven(sum(x)), w_internal_comm)
     @assert all(==(0), w_internal_comm[1])
 
 

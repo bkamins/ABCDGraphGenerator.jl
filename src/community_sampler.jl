@@ -13,14 +13,15 @@ function assign_points(x, c, p)
     @assert sum(c) == size(x, 1)
     @assert length(c) == length(p)
     x = copy(x)
-    all_idxs = collect(1:size(x, 1))
+    @assert size(x, 1) < typemax(Int32)
+    all_idxs = collect(Int32, 1:size(x, 1))
     dist = vec(sum(x -> x^2, x, dims=2))
-    res = Vector{Vector{Int}}(UndefInitializer(), length(c))
+    res = Vector{Vector{Int32}}(UndefInitializer(), length(c))
     for idx in p
         com = c[idx]
         ind = argmax(dist)
-        ref = x[ind, :]
-        dist_c = [sum(x -> x^2, (r - ref)) for r in eachrow(x)]
+        ref = x[ind:ind, :]
+        dist_c = vec(sum((x .- ref) .^ 2; dims=2))
         idxs = partialsortperm(dist_c, 1:com)
         res[idx] = all_idxs[idxs]
         to_keep = setdiff(1:size(x, 1), idxs)
@@ -31,6 +32,7 @@ function assign_points(x, c, p)
     @assert size(x, 1) == 0
     @assert length(all_idxs) == 0
     @assert length(dist) == 0
+    # TODO: disable below for production as overly expensive
     @assert sort(union(res...)) == 1:sum(c)
     return res
 end
@@ -51,8 +53,8 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
     # below we grow communities
     @assert length(a) == length(grow_coms)
     for (com, target) in zip(a, grow_coms)
-        community_center = vec(mean(x[com, :], dims=1))
-        distances = [sum((v .- community_center) .^ 2) for v in eachrow(x)]
+        community_center = mean(x[com, :], dims=1)
+        distances = vec(sum((x .- community_center) .^ 2; dims=2))
         ordering = sortperm(distances)
         com_set = Set(com)
         loc = 1
