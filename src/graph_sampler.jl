@@ -127,7 +127,12 @@ function populate_clusters(params::ABCDParams)
         for (i, vw) in enumerate(w)
             i in stabu && continue # skip nodes in outlier community
             good_idxs = findall(md -> vw <= md, max_degree) # later make it faster, but for now leave a simple implementation
-            isempty(good_idxs) && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw with index $i"))
+            if isempty(good_idxs)
+                m_max_degree = maximum(max_degree)
+                good_idxs = findall(==(m_max_degree), max_degree)
+                @warn "Could not find a large enough cluster for vertex of weight $vw with index $i. Choosing best possible fit."
+            end
+
             good_idxs_weights = Weights(ηus[good_idxs])  # later make it faster, but for now leave a simple implementation
             chosen_idx = sample(good_idxs, good_idxs_weights)
             clusters[i] = findall(c -> chosen_idx in c, cluster_assignments) .+ 1 # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
