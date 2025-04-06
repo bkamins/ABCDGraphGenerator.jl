@@ -83,11 +83,25 @@ function populate_clusters(params::ABCDParams)
     # handle normal communities
     # note that numbers assigned to communities are from 1 to sum(slots[2:end]) so remapping is needed later
     slots_less_1 = slots[2:end]
-    cluster_assignments = populate_overlapping_clusters(slots, params.η, params.d)
-    ηu = [count(c -> i in c, cluster_assignments) for i in 1:sum(slots_less_1)] # count in how many communities each number belongs
+    @info "Populating clusters"
+    @time cluster_assignments = populate_overlapping_clusters(slots, params.η, params.d)
+
+    ηu = zeros(Int, sum(slots_less_1))
+    min_com = fill(typemax(Int), sum(slots_less_1))
+    node_cluster = [Int[] for _ in 1:sum(slots_less_1)]
+    for (c_idx, ca) in enumerate(cluster_assignments)
+        cs1 = length(ca) - 1
+        for v in ca
+            ηu[v] += 1
+            x = min_com[v]
+            min_com[v] = min(x, cs1)
+            push!(node_cluster[v], c_idx + 1) # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
+        end
+    end
     @assert minimum(ηu) >= 1
-    min_com = [minimum(length(c) - 1 for c in cluster_assignments if i in c) for i in 1:sum(slots_less_1)] # minimum size of a community less one for each number
+
     max_degree = (ηu .* min_com) / mul
+    ref_big_degree_idxs = sortperm(max_degree, rev=true)
     nonoutliers = setdiff(1:length(w), tabu)
     wn = w[nonoutliers]
     min_cor = ceil(cor(sort(ηu, rev=true), sort(wn)); digits=2)
@@ -96,52 +110,71 @@ function populate_clusters(params::ABCDParams)
           " is from $min_cor to $max_cor (user asked for $(params.ρ))"
 
     ref_clusters = deepcopy(clusters)
-    ref_max_degree = deepcopy(max_degree)
 
     approx_rho = round(params.ρ; digits=2)
 
     if approx_rho ≈ 0.0
         lo_x = 0.0
         hi_x = 0.0
+        current_x = 0.0
     elseif approx_rho <= min_cor
         @warn "expected ρ is too low; setting to approximately $min_cor"
-        lo_x = -10.0
-        hi_x = -10.0
+        lo_x = -60.0
+        hi_x = -20.0
+        current_x = -40.0
     elseif approx_rho > max_cor
         @warn "expected ρ is too high; setting to approximately $max_cor"
-        lo_x = 10.0
-        hi_x = 10.0
+        lo_x = 20.0
+        hi_x = 60.0
+        current_x = 40.0
     elseif approx_rho > 0
         lo_x = 0.0
-        hi_x = 10.0
+        hi_x = 60.0
+        current_x = 5.0
     else
         @assert approx_rho < 0
-        lo_x = -10.0
+        lo_x = -60.0
         hi_x = 0.0
+        current_x = -5.0
     end
 
+    @info "Optimizing ρ"
     while true
-        current_x = (lo_x + hi_x) / 2.0
         ηus = ηu .^ current_x
-
-        for (i, vw) in enumerate(w)
+        big_degree_idxs = deepcopy(ref_big_degree_idxs)
+        @time for (i, vw) in enumerate(w)
             i in stabu && continue # skip nodes in outlier community
-            good_idxs = findall(md -> vw <= md, max_degree) # later make it faster, but for now leave a simple implementation
-            if isempty(good_idxs)
-                m_max_degree = maximum(max_degree)
-                good_idxs = findall(==(m_max_degree), max_degree)
+
+            max_present = oftype(max_degree[first(big_degree_idxs)], vw)
+            if max_present < vw
                 @warn "Could not find a large enough cluster for vertex of weight $vw with index $i. Choosing best possible fit."
             end
+            vw_cor = min(vw, max_present)
+            lo, hi = 1, length(big_degree_idxs)
+            while lo + 1 < hi
+                mid = (lo + hi) ÷ 2
+                if max_degree[big_degree_idxs[mid]] < vw_cor
+                    hi = mid
+                else
+                    lo = mid
+                end
+            end
+            if max_degree[big_degree_idxs[hi]] >= vw_cor
+                good_idxs = view(big_degree_idxs, 1:hi)
+            else
+                @assert max_degree[big_degree_idxs[lo]] >= vw_cor
+                good_idxs = view(big_degree_idxs, 1:lo)
+            end
 
-            good_idxs_weights = Weights(ηus[good_idxs])  # later make it faster, but for now leave a simple implementation
+            good_idxs_weights = Weights(@view ηus[good_idxs])  # later make it faster, but for now leave a simple implementation
             chosen_idx = sample(good_idxs, good_idxs_weights)
-            clusters[i] = findall(c -> chosen_idx in c, cluster_assignments) .+ 1 # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
-            max_degree[chosen_idx] = -1 # make sure we will not use chosen_idx later; note that this needs refactoring if the code is optimized for speed later
+            clusters[i] = node_cluster[chosen_idx]
+            deleteat!(big_degree_idxs, findfirst(==(chosen_idx), big_degree_idxs)) # make sure we will not use chosen_idx later; note that this needs refactoring if the code is optimized for speed later
         end
         @assert sum(length, clusters) == s0 + sum(length, cluster_assignments)
         cnl = length.(clusters[nonoutliers])
         cur_cor = cor(wn, cnl)
-        # @show cur_cor, lo_x, hi_x, current_x # re-enable this line for diagnostic output
+        @show cur_cor, lo_x, hi_x, current_x # re-enable this line for diagnostic output
         if cur_cor > approx_rho
             hi_x = current_x
         else
@@ -157,7 +190,7 @@ function populate_clusters(params::ABCDParams)
             return clusters # which clusters a given node is assigned to
         end
         clusters = deepcopy(ref_clusters)
-        max_degree = deepcopy(ref_max_degree)
+        current_x = (lo_x + hi_x) / 2.0
     end
 end
 
@@ -399,6 +432,7 @@ The ordering of vertices and clusters is in descending order (as in `params`).
 """
 function gen_graph(params::ABCDParams)
     clusters = populate_clusters(params)
-    edges = config_model(clusters, params)
+    @info "Generating graph"
+    @time edges = config_model(clusters, params)
     (edges=edges, clusters=clusters)
 end

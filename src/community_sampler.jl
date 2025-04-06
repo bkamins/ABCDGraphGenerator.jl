@@ -5,8 +5,28 @@ function sample_points(n, d)
     points = randn(n, d)
     points ./= sqrt.(sum(x -> x^2, points, dims=2))
     points .*= rand(n) .^ (1/d)
-    return points
+    return (points .+ 1.0) ./ 2.0 # put the circle in the [0, 1]^d cube
 end
+
+# performance optimization future code
+# function partition_points(x)
+#     n, d = size(x)
+#     cell_count = n / 10
+#     dim_size = cell_count ^ (1/d)
+#     side_mul = 2.0 ^ floor(log(dim_size) / log(2))
+#     x_cut = floor.(Int32, x .* side_mul) .+ Int32(1)
+#     x_cut_tuple = Tuple.(eachrow(x_cut))
+#     x_partition = Dict{eltype(x_cut_tuple), Vector{Int32}}()
+#     for (i, v) in enumerate(x_cut_tuple)
+#         v = get!(x_partition, v) do
+#             Int32[]
+#         end
+#         push!(v, i)
+#     end
+#     return x_partition, side_mul
+# end
+
+get_coordinate(x) = floor.(Int32, x .* side_mul) .+ Int32(1)
 
 function assign_points(x, c, p)
     @assert ndims(x) == 2
@@ -17,6 +37,7 @@ function assign_points(x, c, p)
     all_idxs = collect(Int32, 1:size(x, 1))
     dist = vec(sum(x -> x^2, x, dims=2))
     res = Vector{Vector{Int32}}(UndefInitializer(), length(c))
+    to_keep = trues(size(x, 1))
     for idx in p
         com = c[idx]
         ind = argmax(dist)
@@ -24,10 +45,11 @@ function assign_points(x, c, p)
         dist_c = vec(sum((x .- ref) .^ 2; dims=2))
         idxs = partialsortperm(dist_c, 1:com)
         res[idx] = all_idxs[idxs]
-        to_keep = setdiff(1:size(x, 1), idxs)
+        to_keep[idxs] .= false
         x = x[to_keep, :]
         dist = dist[to_keep]
         all_idxs = all_idxs[to_keep]
+        deleteat!(to_keep, sort!(idxs))
     end
     @assert size(x, 1) == 0
     @assert length(all_idxs) == 0
@@ -46,6 +68,8 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
     p = randperm(length(true_coms)) # order in which communities are handled
     n = sum(true_coms)
     x = sample_points(n, d)
+
+    #x_part = partition_points(x)
     a = assign_points(x, true_coms, p)
     @assert length.(a) == true_coms
     @assert sum(length, a) == sum(true_coms)
@@ -55,12 +79,18 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
     for (com, target) in zip(a, grow_coms)
         community_center = mean(x[com, :], dims=1)
         distances = vec(sum((x .- community_center) .^ 2; dims=2))
-        ordering = sortperm(distances)
+        ordering = partialsortperm(distances, 1:min(2*target, length(distances)))
         com_set = Set(com)
         loc = 1
         while length(com) < target
             if loc > length(ordering)
-                throw(ArgumentError("η was too large"))
+                if length(ordering) < length(distances)
+                    ordering2 = sortperm(distances)
+                    @assert ordering == ordering2[1:length(ordering)]
+                    ordering = ordering2
+                else
+                    throw(ArgumentError("η was too large"))
+                end
             end
             point = ordering[loc]
             if !(point in com_set)
