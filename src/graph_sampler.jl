@@ -104,39 +104,15 @@ function populate_clusters(params::ABCDParams)
     ref_big_degree_idxs = sortperm(max_degree, rev=true)
     nonoutliers = setdiff(1:length(w), tabu)
     wn = w[nonoutliers]
-    min_cor = ceil(cor(sort(ηu, rev=true), sort(wn)); digits=2)
-    max_cor = floor(cor(sort(ηu), sort(wn)); digits=2)
-    @info "Possible range of correlation between node degree and number of communities it belongs to" *
-          " is from $min_cor to $max_cor (user asked for $(params.ρ))"
 
     ref_clusters = deepcopy(clusters)
 
     approx_rho = round(params.ρ; digits=2)
 
-    if approx_rho ≈ 0.0
-        lo_x = 0.0
-        hi_x = 0.0
-        current_x = 0.0
-    elseif approx_rho <= min_cor
-        @warn "expected ρ is too low; setting to approximately $min_cor"
-        lo_x = -60.0
-        hi_x = -20.0
-        current_x = -40.0
-    elseif approx_rho > max_cor
-        @warn "expected ρ is too high; setting to approximately $max_cor"
-        lo_x = 20.0
-        hi_x = 60.0
-        current_x = 40.0
-    elseif approx_rho > 0
-        lo_x = 0.0
-        hi_x = 60.0
-        current_x = 5.0
-    else
-        @assert approx_rho < 0
-        lo_x = -60.0
-        hi_x = 0.0
-        current_x = -5.0
-    end
+    lo_x = -30.0
+    hi_x = 30.0
+    current_x = 0.0
+    last_cor = 100.0
 
     @info "Optimizing ρ"
     while true
@@ -181,14 +157,15 @@ function populate_clusters(params::ABCDParams)
             lo_x = current_x
         end
 
-        if (abs(cur_cor - params.ρ) < 0.01) || (hi_x - lo_x < 0.001)
-            @info "Achieved correlation between node degree and number of communities it belongs to: $(cor(wn, cnl))" # display degree-community count correlation for non-outliers
+        if (abs(cur_cor - params.ρ) < 0.01) || (hi_x - lo_x < 0.001) || abs(cur_cor - last_cor) < 0.001
+            @info "Achieved correlation between node degree and number of communities it belongs to: $(cor(wn, cnl)), user asked for $(params.ρ)" # display degree-community count correlation for non-outliers
             println("Mean degree distribution:")
             for x in sort(unique(cnl))
                 println("community count $x: mean degree $(mean(wn[cnl .== x])) ($(sum(cnl .== x)) nodes)")
             end
             return clusters # which clusters a given node is assigned to
         end
+        last_cor = cur_cor
         clusters = deepcopy(ref_clusters)
         current_x = (lo_x + hi_x) / 2.0
     end
