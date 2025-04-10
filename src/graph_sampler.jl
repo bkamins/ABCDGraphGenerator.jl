@@ -101,7 +101,7 @@ function populate_clusters(params::ABCDParams)
     @assert minimum(ηu) >= 1
 
     max_degree = (ηu .* min_com) / mul
-    ref_big_degree_idxs = sortperm(max_degree, rev=true)
+    big_degree_idxs = sortperm(max_degree, rev=true)
     nonoutliers = setdiff(1:length(w), tabu)
     wn = w[nonoutliers]
 
@@ -114,38 +114,42 @@ function populate_clusters(params::ABCDParams)
     current_x = 0.0
     last_cor = 100.0
 
+    @assert issorted(w, rev=true)
+    min_nu, max_nu = extrema(ηu)
+    @assert min_nu == 1
+
     @info "Optimizing ρ"
     while true
-        ηus = ηu .^ current_x
-        big_degree_idxs = deepcopy(ref_big_degree_idxs)
+        ηus = (min_nu:max_nu) .^ current_x
+        bins = [Set{Int32}() for i in 1:max_nu]
+
+        current_idx = 0
         @time for (i, vw) in enumerate(w)
             i in stabu && continue # skip nodes in outlier community
 
-            max_present = oftype(max_degree[first(big_degree_idxs)], vw)
-            if max_present < vw
-                @warn "Could not find a large enough cluster for vertex of weight $vw with index $i. Choosing best possible fit."
-            end
-            vw_cor = min(vw, max_present)
-            lo, hi = 1, length(big_degree_idxs)
-            while lo + 1 < hi
-                mid = (lo + hi) ÷ 2
-                if max_degree[big_degree_idxs[mid]] < vw_cor
-                    hi = mid
-                else
-                    lo = mid
+            vw_cor = vw
+            while current_idx < length(big_degree_idxs)
+                current_idx += 1
+                cur_idx_loop = big_degree_idxs[current_idx]
+                if max_degree[cur_idx_loop] < vw_cor
+                    if all(isempty, bins)
+                        @warn "Could not find a large enough cluster for vertex of weight $vw with index $i. Choosing best possible fit."
+                        vw_cor = max_degree[cur_idx_loop]
+                    else
+                        current_idx -= 1
+                        break
+                    end
                 end
+                @assert !(cur_idx_loop in bins[ηu[cur_idx_loop]])
+                push!(bins[ηu[cur_idx_loop]], cur_idx_loop)
             end
-            if max_degree[big_degree_idxs[hi]] >= vw_cor
-                good_idxs = view(big_degree_idxs, 1:hi)
-            else
-                @assert max_degree[big_degree_idxs[lo]] >= vw_cor
-                good_idxs = view(big_degree_idxs, 1:lo)
-            end
+            @assert max_degree[big_degree_idxs[current_idx]] >= vw_cor
 
-            good_idxs_weights = Weights(@view ηus[good_idxs])  # later make it faster, but for now leave a simple implementation
-            chosen_idx = sample(good_idxs, good_idxs_weights)
+            good_idxs_weights = Weights(ηus .* length.(bins))  # later make it faster, but for now leave a simple implementation
+            chosen_idx_group = sample(1:max_nu, good_idxs_weights)
+            chosen_idx = rand(bins[chosen_idx_group])
             clusters[i] = node_cluster[chosen_idx]
-            deleteat!(big_degree_idxs, findfirst(==(chosen_idx), big_degree_idxs)) # make sure we will not use chosen_idx later; note that this needs refactoring if the code is optimized for speed later
+            pop!(bins[chosen_idx_group], chosen_idx)
         end
         @assert sum(length, clusters) == s0 + sum(length, cluster_assignments)
         cnl = length.(clusters[nonoutliers])
