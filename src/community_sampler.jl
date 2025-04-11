@@ -1,5 +1,6 @@
 using Random
 using StatsBase
+using NearestNeighbors
 
 function sample_points(n, d)
     points = randn(n, d)
@@ -26,7 +27,7 @@ end
 #     return x_partition, side_mul
 # end
 
-get_coordinate(x) = floor.(Int32, x .* side_mul) .+ Int32(1)
+# get_coordinate(x) = floor.(Int32, x .* side_mul) .+ Int32(1)
 
 function assign_points(x, c, p)
     @assert ndims(x) == 2
@@ -59,6 +60,32 @@ function assign_points(x, c, p)
     return res
 end
 
+function assign_points2(kdtree, x, c, p)
+    @assert ndims(x) == 2
+    @assert sum(c) == size(x, 1)
+    @assert length(c) == length(p)
+    @assert size(x, 1) < typemax(Int32)
+
+    res = Vector{Vector{Int32}}(UndefInitializer(), length(c))
+    visited = falses(size(x, 1))
+    dist = vec(sum(x -> x^2, x, dims=2))
+
+    was_visited(idx) = visited[idx]
+
+    for idx in p
+        com = c[idx]
+        ind = argmax(dist)
+        ref = x[ind, :]
+        idxs, _ = knn(kdtree, ref, com, false, was_visited)
+        res[idx] = Int32.(idxs)
+        visited[idxs] .= true
+        dist[idxs] .= -1.0
+    end
+    # TODO: disable below for production as overly expensive
+    #   @assert sort(union(res...)) == 1:sum(c)
+    return res
+end
+
 # note that this function returns node numbers from 1 to number_of_non_outlier_nodes
 # for each community we get a set of nodes assigned to it
 function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
@@ -70,16 +97,22 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
     x = sample_points(n, d)
 
     #x_part = partition_points(x)
-    a = assign_points(x, true_coms, p)
+#    @time a2 = assign_points(x, true_coms, p)
+    x2 = transpose(x)
+    kdtree = KDTree(x2)
+    a = assign_points2(kdtree, x, true_coms, p)
+#    @assert length(a) == length(a2)
+    # for (p1, q1) in zip(a, a2)
+    #     @assert sort(p1) == sort(q1)
+    # end
     @assert length.(a) == true_coms
     @assert sum(length, a) == sum(true_coms)
 
     # below we grow communities
     @assert length(a) == length(grow_coms)
     for (com, target) in zip(a, grow_coms)
-        community_center = mean(x[com, :], dims=1)
-        distances = vec(sum((x .- community_center) .^ 2; dims=2))
-        ordering = partialsortperm(distances, 1:min(2*target, length(distances)))
+        community_center = vec(mean(x[com, :], dims=1))
+        ordering, _ = knn(kdtree, community_center, min(2 * target, size(x, 1)), true)
         com_set = Set(com)
         loc = 1
         while length(com) < target
@@ -99,6 +132,7 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
             loc += 1
         end
     end
+
     @assert length.(a) == grow_coms
     @assert sum(length, a) == sum(grow_coms)
     @assert all(allunique(c) for c in a)
