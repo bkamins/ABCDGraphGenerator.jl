@@ -2,8 +2,8 @@
     ABCDParams
 
 A structure holding parameters for ABCD graph generator. Fields:
-* w::Vector{Int}:   a sorted in descending order list of vertex degrees
-* s::Vector{Int}:   a sorted in descending order list of cluster sizes
+* w::Vector{Int32}:   a sorted in descending order list of vertex degrees
+* s::Vector{Int32}:   a sorted in descending order list of cluster sizes
                     (except first community which is outliers);
                     cluster sizes must be for primary community
 * ξ::Float64:       background graph fraction
@@ -14,14 +14,15 @@ A structure holding parameters for ABCD graph generator. Fields:
 The graph will be generated using configuration model global approach.
 """
 struct ABCDParams
-    w::Vector{Int}
-    s::Vector{Int}
+    w::Vector{Int32}
+    s::Vector{Int32}
     ξ::Float64
     η::Float64
     d::Int
     ρ::Float64
 
-    function ABCDParams(w::Vector{Int}, s::Vector{Int}, ξ::Float64, η::Float64, d::Int, ρ::Float64)
+    function ABCDParams(w::Vector{Int32}, s::Vector{Int32}, ξ::Float64, η::Float64, d::Int, ρ::Float64)
+        @assert length(w) < typemax(Int32)
         all(>(0), w) || throw(ArgumentError("all degrees must be positive"))
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
         length(s) < 2 && throw(ArgumentError("no communities requested"))
@@ -43,7 +44,7 @@ struct ABCDParams
     end
 end
 
-function randround(x)
+function randround(x)::Int32
     d = floor(Int, x)
     d + (rand() < x - d)
 end
@@ -84,26 +85,28 @@ function populate_clusters(params::ABCDParams)
     # note that numbers assigned to communities are from 1 to sum(slots[2:end]) so remapping is needed later
     slots_less_1 = slots[2:end]
     @info "Populating clusters"
-    @time cluster_assignments = populate_overlapping_clusters(slots, params.η, params.d)
+    @time begin
+        cluster_assignments = populate_overlapping_clusters(slots, params.η, params.d)
 
-    ηu = zeros(Int, sum(slots_less_1))
-    min_com = fill(typemax(Int), sum(slots_less_1))
-    node_cluster = [Int[] for _ in 1:sum(slots_less_1)]
-    for (c_idx, ca) in enumerate(cluster_assignments)
-        cs1 = length(ca) - 1
-        for v in ca
-            ηu[v] += 1
-            x = min_com[v]
-            min_com[v] = min(x, cs1)
-            push!(node_cluster[v], c_idx + 1) # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
+        ηu = zeros(Int, sum(slots_less_1))
+        min_com = fill(typemax(Int), sum(slots_less_1))
+        node_cluster = [Int[] for _ in 1:sum(slots_less_1)]
+        for (c_idx, ca) in enumerate(cluster_assignments)
+            cs1 = length(ca) - 1
+            for v in ca
+                ηu[v] += 1
+                x = min_com[v]
+                min_com[v] = min(x, cs1)
+                push!(node_cluster[v], c_idx + 1) # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
+            end
         end
-    end
-    @assert minimum(ηu) >= 1
+        @assert minimum(ηu) >= 1
 
-    max_degree = (ηu .* min_com) / mul
-    big_degree_idxs = sortperm(max_degree, rev=true)
-    nonoutliers = setdiff(1:length(w), tabu)
-    wn = w[nonoutliers]
+        max_degree = (ηu .* min_com) / mul
+        big_degree_idxs = sortperm(max_degree, rev=true)
+        nonoutliers = setdiff(1:length(w), tabu)
+        wn = w[nonoutliers]
+    end
 
     ref_clusters = deepcopy(clusters)
 
@@ -119,12 +122,12 @@ function populate_clusters(params::ABCDParams)
     @assert min_nu == 1
 
     @info "Optimizing ρ"
-    while true
+    @time while true
         ηus = (min_nu:max_nu) .^ current_x
         bins = [Set{Int32}() for i in 1:max_nu]
 
         current_idx = 0
-        @time for (i, vw) in enumerate(w)
+        for (i, vw) in enumerate(w)
             i in stabu && continue # skip nodes in outlier community
 
             vw_cor = vw
@@ -154,29 +157,32 @@ function populate_clusters(params::ABCDParams)
         @assert sum(length, clusters) == s0 + sum(length, cluster_assignments)
         cnl = length.(clusters[nonoutliers])
         cur_cor = cor(wn, cnl)
-        @show cur_cor, lo_x, hi_x, current_x # re-enable this line for diagnostic output
+        # @show cur_cor, lo_x, hi_x, current_x # re-enable this line for diagnostic output
         if cur_cor > approx_rho
             hi_x = current_x
         else
             lo_x = current_x
         end
 
-        if (abs(cur_cor - params.ρ) < 0.01) || (hi_x - lo_x < 0.001) || abs(cur_cor - last_cor) < 0.001
+        if isnan(cur_cor) || (abs(cur_cor - params.ρ) < 0.01) || (hi_x - lo_x < 0.001) || abs(cur_cor - last_cor) < 0.001
             @info "Achieved correlation between node degree and number of communities it belongs to: $(cor(wn, cnl)), user asked for $(params.ρ)" # display degree-community count correlation for non-outliers
             println("Mean degree distribution:")
             for x in sort(unique(cnl))
                 println("community count $x: mean degree $(mean(wn[cnl .== x])) ($(sum(cnl .== x)) nodes)")
             end
-            return clusters # which clusters a given node is assigned to
+            break
         end
         last_cor = cur_cor
         clusters = deepcopy(ref_clusters)
         current_x = (lo_x + hi_x) / 2.0
     end
+
+    return clusters
 end
 
-function generate_initial_graph(weights::Vector{Int})
-    stubs = Int[]
+function generate_initial_graph(weights::Vector{Int32})
+    # @show count(>(0), weights), sum(weights), maximum(weights), sort(weights, rev=true)[1:10]
+    stubs = Int32[]
     for i in 1:length(weights)
         for _ in 1:weights[i]
             push!(stubs, i)
@@ -188,8 +194,8 @@ function generate_initial_graph(weights::Vector{Int})
 
     shuffle!(stubs)
 
-    local_edges = Set{Tuple{Int,Int}}()
-    recycle = Tuple{Int,Int}[]
+    local_edges = Set{Tuple{Int32,Int32}}()
+    recycle = Tuple{Int32,Int32}[]
 
     for i in 1:2:length(stubs)
         e = minmax(stubs[i], stubs[i+1])
@@ -257,7 +263,7 @@ function generate_initial_graph(weights::Vector{Int})
         success || push!(recycle, p1)
     end
 
-    unused_stubs = Int[]
+    unused_stubs = Int32[]
     for (a, b) in recycle
         push!(unused_stubs, a, b)
     end
@@ -278,7 +284,7 @@ function config_model(clusters, params)
 
     w_external = w - w_internal_raw
 
-    clusterlist = [Int[] for i in 1:maximum(c -> maximum(c), clusters)] # list of nodes in each cluster
+    clusterlist = [Int32[] for i in 1:maximum(c -> maximum(c), clusters)] # list of nodes in each cluster
     for i in axes(clusters, 1)
         c = clusters[i]
         for x in c
@@ -286,7 +292,7 @@ function config_model(clusters, params)
         end
     end
 
-    w_internal_comm = [zeros(Int, length(w_internal_raw)) for i in 1:length(clusterlist)] # this holds internal degree of each community
+    w_internal_comm = [zeros(Int32, length(w_internal_raw)) for i in 1:length(clusterlist)] # this holds internal degree of each community
 
     for i in axes(clusters, 1)
         wi = w_internal_raw[i]
@@ -313,9 +319,8 @@ function config_model(clusters, params)
     @assert all(x -> iseven(sum(x)), w_internal_comm)
     @assert all(==(0), w_internal_comm[1])
 
-
-    partial_graphs = Set{Tuple{Int,Int}}[]
-    unused_stubs = Int[]
+    partial_graphs = Set{Tuple{Int32,Int32}}[]
+    unused_stubs = Int32[]
 
     idxs_com = 0
     for w_int in w_internal_comm
@@ -335,7 +340,7 @@ function config_model(clusters, params)
         append!(unused_stubs, s)
     end
 
-    edges = Set{Tuple{Int,Int}}()
+    edges = Set{Tuple{Int32,Int32}}()
 
     for g in partial_graphs
         for e in g

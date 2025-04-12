@@ -76,7 +76,7 @@ function assign_points2(kdtree, x, c, p)
         com = c[idx]
         ind = argmax(dist)
         ref = x[ind, :]
-        idxs, _ = knn(kdtree, ref, com, false, was_visited)
+        idxs, _ = knn(kdtree, ref, Int(com), false, was_visited)
         res[idx] = Int32.(idxs)
         visited[idxs] .= true
         dist[idxs] .= -1.0
@@ -88,7 +88,7 @@ end
 
 # note that this function returns node numbers from 1 to number_of_non_outlier_nodes
 # for each community we get a set of nodes assigned to it
-function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
+function populate_overlapping_clusters(coms::Vector{Int32}, η::Float64, d::Int)
     @assert 1 <= d
     true_coms = coms[2:end] # we are interested only in non-outlier communities
     grow_coms = [randround(s * η) for s in true_coms] # this is a target size of communities, as coms is primary community sizes
@@ -97,7 +97,7 @@ function populate_overlapping_clusters(coms::Vector{Int}, η::Float64, d::Int)
     x = sample_points(n, d)
 
     #x_part = partition_points(x)
-#    @time a2 = assign_points(x, true_coms, p)
+#   a2 = assign_points(x, true_coms, p)
     x2 = transpose(x)
     kdtree = KDTree(x2)
     a = assign_points2(kdtree, x, true_coms, p)

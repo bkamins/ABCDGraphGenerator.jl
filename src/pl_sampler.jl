@@ -46,7 +46,7 @@ function sample_degrees(τ₁, d_min, d_max, n, max_iter)
     local s
     for i in 1:max_iter
         s = sample_trunc_powerlaw(τ₁, d_min, d_max, n)
-        iseven(sum(s)) && return sort!(s, rev=true)
+        iseven(sum(s)) && return Int32.(sort!(s, rev=true))
     end
     @warn "Failed to sample an admissible degree sequence in $max_iter draws. Fixing"
     i = argmax(s)
@@ -55,7 +55,7 @@ function sample_degrees(τ₁, d_min, d_max, n, max_iter)
     else
         s[i] -= 1
     end
-    return sort!(s, rev=true)
+    return Int32.(sort!(s, rev=true))
 end
 
 """
@@ -86,7 +86,7 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
             stopidx += 1
             ss += s[stopidx]
         end
-        ss == n && return sort!(s[1:stopidx], rev=true)
+        ss == n && return Int32.(sort!(s[1:stopidx], rev=true))
         if ss < best_ss
             best_ss = ss
             best_s = s[1:stopidx]
@@ -114,5 +114,5 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
         best_ss += change
         best_s[i] += change
     end
-    return sort!(best_s, rev=true)
+    return Int32.(sort!(best_s, rev=true))
 end
