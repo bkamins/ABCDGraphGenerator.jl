@@ -292,47 +292,90 @@ function config_model(clusters, params)
         end
     end
 
-    w_internal_comm = [zeros(Int32, length(w_internal_raw)) for i in 1:length(clusterlist)] # this holds internal degree of each community
+    # @time w_internal_comm = [zeros(Int32, length(w_internal_raw)) for i in 1:length(clusterlist)] # this holds internal degree of each community
 
+    # @time for i in axes(clusters, 1)
+    #     wi = w_internal_raw[i]
+    #     nc = length(clusters[i])
+    #     share = floor(Int, wi / nc)
+    #     extra = wi - nc * share
+    #     z = sample(1:nc, extra, replace=false)
+    #     for j in 1:nc
+    #         w_internal_comm[clusters[i][j]][i] = share + (j in z)
+    #     end
+    # end
+
+    # for wic in w_internal_comm # make sure that for each community sum of its degrees is even
+    #     if isodd(sum(wic))
+    #         largest = argmax(wic)
+    #         @assert wic[largest] > 0
+    #         wic[largest] -= 1
+    #         w_external[largest] += 1
+    #     end
+    # end
+
+    # @assert sum(w_internal_comm) + w_external == w
+    # @assert iseven(sum(w_external))
+    # @assert all(x -> iseven(sum(x)), w_internal_comm)
+    # @assert all(==(0), w_internal_comm[1])
+
+    # partial_graphs = Set{Tuple{Int32,Int32}}[]
+    # unused_stubs = Int32[]
+
+    # idxs_com = 0
+    # for w_int in w_internal_comm
+    #     idxs_com += 1
+    #     if idxs_com == 1 # outlier community
+    #         @assert sum(w_int) == 0
+    #     else
+    #         g, s = generate_initial_graph(w_int)
+    #         push!(partial_graphs, g)
+    #         append!(unused_stubs, s)
+    #     end
+    # end
+
+    w_internal_node = [Dict{Int32,Int32}() for i in 1:length(w_internal_raw)] # this holds internal degree of each community
+    partial_graphs = Set{Tuple{Int32,Int32}}[]
+    unused_stubs = Int32[]
     for i in axes(clusters, 1)
         wi = w_internal_raw[i]
         nc = length(clusters[i])
         share = floor(Int, wi / nc)
         extra = wi - nc * share
-        z = shuffle(1:nc)[1:extra]
+        z = sample(1:nc, extra, replace=false)
         for j in 1:nc
-            w_internal_comm[clusters[i][j]][i] = share + (j in z)
+            if clusters[i][j] == 1
+                @assert share + (j in z) == 0
+                @assert nc == 1
+            else
+                w_internal_node[i][clusters[i][j]] = share + (j in z)
+            end
         end
+        @assert wi == share * nc + length(z)
     end
 
-    for wic in w_internal_comm # make sure that for each community sum of its degrees is even
+    # total_wic = zeros(Int32, length(w_internal_raw))
+    wic = zeros(Int32, length(w_internal_raw))
+    for i in 2:length(clusterlist)
+        fill!(wic, 0)
+        for j in clusterlist[i]
+            wic[j] = w_internal_node[j][i]
+        end
         if isodd(sum(wic))
             largest = argmax(wic)
             @assert wic[largest] > 0
             wic[largest] -= 1
             w_external[largest] += 1
         end
-    end
+        @assert iseven(sum(wic))
+        # total_wic += wic
 
-    @assert sum(w_internal_comm) + w_external == w
+        g, s = generate_initial_graph(wic)
+        push!(partial_graphs, g)
+        append!(unused_stubs, s)
+    end
+    # @assert w_external + total_wic == w
     @assert iseven(sum(w_external))
-    @assert all(x -> iseven(sum(x)), w_internal_comm)
-    @assert all(==(0), w_internal_comm[1])
-
-    partial_graphs = Set{Tuple{Int32,Int32}}[]
-    unused_stubs = Int32[]
-
-    idxs_com = 0
-    for w_int in w_internal_comm
-        idxs_com += 1
-        if idxs_com == 1 # outlier community
-            @assert sum(w_int) == 0
-        else
-            g, s = generate_initial_graph(w_int)
-            push!(partial_graphs, g)
-            append!(unused_stubs, s)
-        end
-    end
 
     let
         g, s = generate_initial_graph(w_external)
