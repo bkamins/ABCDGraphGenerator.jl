@@ -112,8 +112,8 @@ function populate_clusters(params::ABCDParams)
 
     approx_rho = round(params.ρ; digits=2)
 
-    lo_x = -30.0
-    hi_x = 30.0
+    lo_x = -60.0
+    hi_x = 60.0
     current_x = 0.0
     last_cor = 100.0
 
