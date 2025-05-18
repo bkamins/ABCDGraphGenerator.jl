@@ -36,6 +36,9 @@ It contains the following files:
 * `deg_sampler.jl`: samples degrees of vertices in the graph
 * `com_sampler.jl`: samples communitiy sizes in the graph
 * `graph_sampler.jl`: samples edges and community assignments in the graph
+* `abcd_oo_sampler.jl`: generates an ABCD graph with overlapping communities following a configuration file
+                        (the `example_config_oo.toml` file shows example configuration for this version
+                         of the model)
 
 The main file intended to be used is `abcd_sampler.jl`.
 Here is an example configuration file, named `example_config.toml`, in this guide:
