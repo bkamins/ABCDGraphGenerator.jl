@@ -1,37 +1,5 @@
-using StatsBase, Random
-
-function trunc_powerlaw_weigths(α::Real, v_min::Int, v_max::Int)
-    @assert α >= 1
-    @assert 1 <= v_min <= v_max
-    w = Weights([1/i^α for i in v_min:v_max])
-end
-
-function sample_trunc_powerlaw(α::Real, v_min::Int, v_max::Int, n::Int)
-    @assert α >= 1
-    @assert 1 <= v_min <= v_max
-    @assert n > 0
-    w = Weights([1/i^α for i in v_min:v_max])
-    sample(v_min:v_max, w, n)
-end
-
-sample_trunc_powerlaw(W::Weights, v_min::Int, v_max::Int, n::Int) = (@assert n > 0; sample(v_min:v_max, W, n))
-
 """
-    get_ev(α, v_min, v_max)
-
-Return the expected value of truncated discrete power law distribution
-with truncation range `[v_min, v_max]` and exponent `α`.
-"""
-function get_ev(α, v_min, v_max)
-    @assert α > 1
-    @assert 1 <= v_min <= v_max
-    w = [1/i^α for i in v_min:v_max]
-    w /= sum(w)
-    sum(x*w[i] for (i, x) in enumerate(v_min:v_max))
-end
-
-"""
-    sample_degrees(τ₁, d_min, d_max, n, max_iter)
+    sample_degrees_oo(τ₁, d_min, d_max, n, max_iter)
 
 Return a vector of length `n` of sampled degrees of vertices following a truncated
 discrete power law distribution with truncation range `[d_min, d_max]` and exponent `τ₁`.
@@ -42,11 +10,11 @@ with highest degree.
 
 The producedure does not check if the returned vector is a graphical degree sequence.
 """
-function sample_degrees(τ₁, d_min, d_max, n, max_iter)
+function sample_degrees_oo(τ₁, d_min, d_max, n, max_iter)
     local s
     for i in 1:max_iter
         s = sample_trunc_powerlaw(τ₁, d_min, d_max, n)
-        iseven(sum(s)) && return sort!(s, rev=true)
+        iseven(sum(s)) && return Int32.(sort!(s, rev=true))
     end
     @warn "Failed to sample an admissible degree sequence in $max_iter draws. Fixing"
     i = argmax(s)
@@ -55,11 +23,11 @@ function sample_degrees(τ₁, d_min, d_max, n, max_iter)
     else
         s[i] -= 1
     end
-    return sort!(s, rev=true)
+    return Int32.(sort!(s, rev=true))
 end
 
 """
-    sample_communities(τ₂, c_min, c_max, n, max_iter)
+    sample_communities_oo(τ₂, c_min, c_max, n, max_iter)
 
 Return a vector of sampled community sizes following a truncated
 discrete power law distribution with truncation range `[c_min, c_max]` and exponent `τ₂`.
@@ -69,7 +37,7 @@ The sampling is attempted `max_iter` times to find an admissible result.
 In case of failure a correction of community sizes is applied to the sampled sequence
 that was closest to a feasible one to ensure that the result is admissible.
 """
-function sample_communities(τ₂, c_min, c_max, n, max_iter)
+function sample_communities_oo(τ₂, c_min, c_max, n, max_iter)
     @assert 1 <= c_min <= c_max
     l_min = n / c_max
     l_max = n / c_min
@@ -86,7 +54,7 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
             stopidx += 1
             ss += s[stopidx]
         end
-        ss == n && return sort!(s[1:stopidx], rev=true)
+        ss == n && return Int32.(sort!(s[1:stopidx], rev=true))
         if ss < best_ss
             best_ss = ss
             best_s = s[1:stopidx]
@@ -114,5 +82,5 @@ function sample_communities(τ₂, c_min, c_max, n, max_iter)
         best_ss += change
         best_s[i] += change
     end
-    return sort!(best_s, rev=true)
+    return Int32.(sort!(best_s, rev=true))
 end

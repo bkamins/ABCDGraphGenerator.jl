@@ -2,207 +2,400 @@
     ABCDParams
 
 A structure holding parameters for ABCD graph generator. Fields:
-* w::Vector{Int32}:   a sorted in descending order list of vertex degrees
-* s::Vector{Int32}:   a sorted in descending order list of cluster sizes
-                    (except first community which is outliers);
-                    cluster sizes must be for primary community
-* ξ::Float64:       background graph fraction
-* η::Float64:       average number of communities a non-outlier node is part of; default 1
-* d::Int:           dimensionality of latent space
-* ρ::Float64:       correlation between degree and number of communities node is in
+* w::Vector{Int}:             a sorted in descending order list of vertex degrees
+* s::Vector{Int}:             a sorted in descending order list of cluster sizes
+                              if hasoutliers then first community is outliers
+* μ::Union{Float64, Nothing}: mixing parameter
+* ξ::Union{Float64, Nothing}: background graph fraction
+* isCL::Bool:                 if `true` a Chung-Lu model is used, otherwise configuration model
+* islocal::Bool:              if `true` mixing parameter restriction is cluster local, otherwise
+                              it is only global
+* hasoutliers::Bool:          if first community is outliers
 
-The graph will be generated using configuration model global approach.
+Exactly one of ξ and μ must be passed as `Float64`. Also if `ξ` is passed then
+`islocal` must be `false`.
+
+The base ABCD graph is generated when ξ is passed and `isCL` is set to `false`.
 """
 struct ABCDParams
-    w::Vector{Int32}
-    s::Vector{Int32}
-    ξ::Float64
-    η::Float64
-    d::Int
-    ρ::Float64
+    w::Vector{Int}
+    s::Vector{Int}
+    μ::Union{Float64, Nothing}
+    ξ::Union{Float64, Nothing}
+    isCL::Bool
+    islocal::Bool
+    hasoutliers::Bool
 
-    function ABCDParams(w::Vector{Int32}, s::Vector{Int32}, ξ::Float64, η::Float64, d::Int, ρ::Float64)
-        @assert length(w) < typemax(Int32)
-        all(>(0), w) || throw(ArgumentError("all degrees must be positive"))
+    function ABCDParams(w, s, μ, ξ, isCL, islocal, hasoutliers=false)
         length(w) == sum(s) || throw(ArgumentError("inconsistent data"))
-        length(s) < 2 && throw(ArgumentError("no communities requested"))
-        s[1] >= 0 || throw(ArgumentError("negative count of outliers passed"))
-        0 ≤ ξ ≤ 1 || throw(ArgumentError("inconsistent data ξ"))
-        η < 1 && throw(ArgumentError("η must be greater or equal than 1"))
-        d < 1 && throw(ArgumentError("d must be greater or equal than 1"))
-
-        news = copy(s)
-        all(>(0), @view(news[2:end])) || throw(ArgumentError("all community sizes must be positive"))
-        sort!(@view(news[2:end]), rev=true)
-
-        largest = news[2] # size of largest non-outlier community
-        if η * largest > length(w) - news[1]
-            throw(ArgumentError("η must be small enough so that overlapping communities are not too big"))
+        if !isnothing(μ)
+            0 ≤ μ ≤ 1 || throw(ArgumentError("inconsistent data on μ"))
+        end
+        if !isnothing(ξ)
+            0 ≤ ξ ≤ 1 || throw(ArgumentError("inconsistent data ξ"))
+            if islocal
+                throw(ArgumentError("when ξ is provided local model is not allowed"))
+            end
+        end
+        if isnothing(μ) && isnothing(ξ)
+            throw(ArgumentError("inconsistent data: either μ or ξ must be provided"))
         end
 
-        new(sort(w, rev=true), news, ξ, η, d, ρ)
+        if !(isnothing(μ) || isnothing(ξ))
+            throw(ArgumentError("inconsistent data: only μ or ξ may be provided"))
+        end
+
+        if hasoutliers
+            news = copy(s)
+            sort!(@view(news[2:end]), rev=true)
+        else
+            news = sort(s, rev=true)
+        end
+
+        new(sort(w, rev=true),
+            news,
+            μ, ξ, isCL, islocal, hasoutliers)
     end
 end
 
-function randround(x)::Int32
+function randround(x)
     d = floor(Int, x)
     d + (rand() < x - d)
 end
 
 function populate_clusters(params::ABCDParams)
     w, s = params.w, params.s
-
-    n = length(w)
-    s0 = s[1]
-    ϕ = 1.0 - sum((sl/(n-s0))^2 for sl in s[2:end]) * (n-s0)*params.ξ / ((n-s0)*params.ξ + s0)
-    mul = 1.0 - params.ξ*ϕ
-
+    if isnothing(params.ξ)
+        mul = 1.0 - params.μ
+    else
+        n = length(w)
+        if params.hasoutliers
+            s0 = s[1]
+            n = length(params.w)
+            ϕ = 1.0 - sum((sl/(n-s0))^2 for sl in s[2:end]) * (n-s0)*params.ξ / ((n-s0)*params.ξ + s0)
+        else
+            ϕ = 1.0 - sum((sl/n)^2 for sl in s)
+        end
+        mul = 1.0 - params.ξ*ϕ
+    end
     @assert length(w) == sum(s)
     @assert 0 ≤ mul ≤ 1
     @assert issorted(w, rev=true)
-    @assert issorted(s[2:end], rev=true)
-
-    slots = copy(s) # number of slots left in a community to be assigned
-    clusters = [Int[] for i in 1:length(w)] # primary cluster of a node, [1] is outlier community, Int[] is no community yet
-
-    # handle outliers
-    nout = s[1]
-    n = length(params.w)
-    L = sum(d -> min(1.0, params.ξ * d), params.w)
-    threshold = L + nout - L * nout / n - 1.0 # we cannot put too heavy nodes as outliers
-    idx = findfirst(<=(threshold), params.w)
-    @assert all(i -> params.w[i] <= threshold, idx:n)
-    if length(idx:n) < nout
-        throw(ArgumentError("not enough nodes feasible for classification as outliers"))
+    if params.hasoutliers
+        @assert issorted(s[2:end], rev=true)
+    else
+        @assert issorted(s, rev=true)
     end
-    tabu = sample(idx:n, nout, replace=false)
-    for i in tabu
-        push!(clusters[i], 1) # outlier community
+
+    slots = copy(s)
+    clusters = fill(-1, length(w))
+
+    if params.hasoutliers
+        nout = s[1]
+        n = length(params.w)
+        L = sum(d -> min(1.0, params.ξ * d), params.w)
+        threshold = L + nout - L * nout / n - 1.0
+        idx = findfirst(<=(threshold), params.w)
+        @assert all(i -> params.w[i] <= threshold, idx:n)
+        if length(idx:n) < nout
+            throw(ArgumentError("not enough nodes feasible for classification as outliers"))
+        end
+        tabu = sample(idx:n, nout, replace=false)
+        clusters[tabu] .= 1
+        slots[1] = 0
+        stabu = Set(tabu)
+    else
+        stabu = Set{Int}()
     end
-    stabu = Set(tabu) # stabu is a set of indices already used up
 
-    # handle normal communities
-    # note that numbers assigned to communities are from 1 to sum(slots[2:end]) so remapping is needed later
-    slots_less_1 = slots[2:end]
-    @info "Populating clusters"
-    @time begin
-        cluster_assignments = populate_overlapping_clusters(slots, params.η, params.d)
+    j0 = params.hasoutliers ? 1 : 0
+    j = j0
+    tmp_wsum = 0
+    bad_weights = Int[]
+    for (i, vw) in enumerate(w)
+        i in stabu && continue
 
-        ηu = zeros(Int, sum(slots_less_1))
-        min_com = fill(typemax(Int), sum(slots_less_1))
-        node_cluster = [Int[] for _ in 1:sum(slots_less_1)]
-        for (c_idx, ca) in enumerate(cluster_assignments)
-            cs1 = length(ca) - 1
-            for v in ca
-                ηu[v] += 1
-                x = min_com[v]
-                min_com[v] = min(x, cs1)
-                push!(node_cluster[v], c_idx + 1) # write down cluster numbers of chosen node; need to add 1 as first cluster is for outliers
+        # make sure we have at least one assignment of node to cluster
+        while j + 1 ≤ length(s) && tmp_wsum == 0
+            if mul * vw + 1 > s[j+1]
+                push!(bad_weights, vw)
             end
+            j += 1
+            tmp_wsum += slots[j]
         end
-        @assert minimum(ηu) >= 1
 
-        max_degree = (ηu .* min_com) / mul
-        big_degree_idxs = sortperm(max_degree, rev=true)
-        nonoutliers = setdiff(1:length(w), tabu)
-        wn = w[nonoutliers]
+        while j + 1 ≤ length(s) && mul * vw + 1 ≤ s[j + 1]
+            j += 1
+            tmp_wsum += slots[j]
+        end
+
+        # these errors should not happen but keep them for safety reasons
+        j == j0 && throw(ArgumentError("could not find a large enough cluster for vertex of weight $vw"))
+        wts = Weights(view(slots, (j0+1):j))
+        wts.sum == 0 && throw(ArgumentError("could not find an empty slot for vertex of weight $vw"))
+        @assert wts.sum == tmp_wsum
+
+        loc = sample((j0+1):j, wts)
+        clusters[i] = loc
+        slots[loc] -= 1
+        tmp_wsum -= 1
     end
 
-    ref_clusters = deepcopy(clusters)
-
-    approx_rho = round(params.ρ; digits=2)
-
-    lo_x = -60.0
-    hi_x = 60.0
-    current_x = 0.0
-    last_cor = 100.0
-
-    @assert issorted(w, rev=true)
-    min_nu, max_nu = extrema(ηu)
-    @assert min_nu == 1
-
-    @info "Optimizing ρ"
-    @time while true
-        ηus = (min_nu:max_nu) .^ current_x
-        bins = [Set{Int32}() for i in 1:max_nu]
-
-        current_idx = 0
-        for (i, vw) in enumerate(w)
-            i in stabu && continue # skip nodes in outlier community
-
-            vw_cor = vw
-            while current_idx < length(big_degree_idxs)
-                current_idx += 1
-                cur_idx_loop = big_degree_idxs[current_idx]
-                if max_degree[cur_idx_loop] < vw_cor
-                    if all(isempty, bins)
-                        @warn "Could not find a large enough cluster for vertex of weight $vw with index $i. Choosing best possible fit."
-                        vw_cor = max_degree[cur_idx_loop]
-                    else
-                        current_idx -= 1
-                        break
-                    end
-                end
-                @assert !(cur_idx_loop in bins[ηu[cur_idx_loop]])
-                push!(bins[ηu[cur_idx_loop]], cur_idx_loop)
-            end
-            @assert max_degree[big_degree_idxs[current_idx]] >= vw_cor
-
-            good_idxs_weights = Weights(ηus .* length.(bins))  # later make it faster, but for now leave a simple implementation
-            chosen_idx_group = sample(1:max_nu, good_idxs_weights)
-            chosen_idx = rand(bins[chosen_idx_group])
-            clusters[i] = node_cluster[chosen_idx]
-            pop!(bins[chosen_idx_group], chosen_idx)
-        end
-        @assert sum(length, clusters) == s0 + sum(length, cluster_assignments)
-        cnl = length.(clusters[nonoutliers])
-        cur_cor = cor(wn, cnl)
-        # @show cur_cor, lo_x, hi_x, current_x # re-enable this line for diagnostic output
-        if cur_cor > approx_rho
-            hi_x = current_x
-        else
-            lo_x = current_x
-        end
-
-        if isnan(cur_cor) || (abs(cur_cor - params.ρ) < 0.01) || (hi_x - lo_x < 0.001) || abs(cur_cor - last_cor) < 0.001
-            @info "Achieved correlation between node degree and number of communities it belongs to: $(cor(wn, cnl)), user asked for $(params.ρ)" # display degree-community count correlation for non-outliers
-            println("Mean degree distribution:")
-            for x in sort(unique(cnl))
-                println("community count $x: mean degree $(mean(wn[cnl .== x])) ($(sum(cnl .== x)) nodes)")
-            end
-            break
-        end
-        last_cor = cur_cor
-        clusters = deepcopy(ref_clusters)
-        current_x = (lo_x + hi_x) / 2.0
+    if !isempty(bad_weights)
+        @warn "Could not find a large enough cluster for vertices of weights:\n$bad_weights.\n" *
+              "Resulting ξ might be slightly biased."
     end
 
+    @assert sum(slots) == 0
+    @assert minimum(clusters) == 1
     return clusters
 end
 
-function generate_initial_graph(weights::Vector{Int32})
-    # @show count(>(0), weights), sum(weights), maximum(weights), sort(weights, rev=true)[1:10]
-    stubs = Int32[]
-    for i in 1:length(weights)
-        for _ in 1:weights[i]
-            push!(stubs, i)
+function CL_model(clusters, params)
+    @assert !params.hasoutliers
+    @assert params.isCL
+    w, s, μ = params.w, params.s, params.μ
+    cluster_weight = zeros(Int, length(s))
+    for i in axes(w, 1)
+        cluster_weight[clusters[i]] += w[i]
+    end
+    total_weight = sum(cluster_weight)
+    if params.islocal
+        ξl = @. μ / (1.0 - cluster_weight / total_weight)
+        maximum(ξl) >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
+    else
+        if isnothing(params.ξ)
+            ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
+            ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
+        else
+            ξg = params.ξ
         end
     end
 
-    @assert sum(weights) == length(stubs)
-    @assert iseven(length(stubs))
+    wf = float.(w)
+    edges = Set{Tuple{Int, Int}}()
+    for i in axes(s, 1)
+        local_edges = Set{Tuple{Int, Int}}()
+        idxᵢ = findall(==(i), clusters)
+        wᵢ = wf[idxᵢ]
+        ξ = params.islocal ? ξl[i] : ξg
+        m = randround((1-ξ) * sum(wᵢ) / 2)
+        ww = Weights(wᵢ)
+        while length(local_edges) < m
+            a = sample(idxᵢ, ww, m - length(local_edges))
+            b = sample(idxᵢ, ww, m - length(local_edges))
+            for (p, q) in zip(a, b)
+                p != q && push!(local_edges, minmax(p, q))
+            end
+        end
+        union!(edges, local_edges)
+    end
+    wwt = if params.islocal
+        Weights([ξl[clusters[i]]*x for (i,x) in enumerate(wf)])
+    else
+        Weights(ξg * wf)
+    end
+    while 2*length(edges) < total_weight
+        a = sample(axes(w, 1), wwt, randround(total_weight / 2) - length(edges))
+        b = sample(axes(w, 1), wwt, randround(total_weight / 2) - length(edges))
+        for (p, q) in zip(a, b)
+            p != q && push!(edges, minmax(p, q))
+        end
+    end
+    edges
+end
 
+function config_model(clusters, params)
+    @assert !params.isCL
+    @assert !params.islocal
+    w, s, μ = params.w, params.s, params.μ
+
+    cluster_weight = zeros(Int, length(s))
+    for i in axes(w, 1)
+        cluster_weight[clusters[i]] += w[i]
+    end
+    total_weight = sum(cluster_weight)
+    if params.islocal
+        ξl = @. μ / (1.0 - cluster_weight / total_weight)
+        maximum(ξl) >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
+        w_internal_raw = [w[i] * (1 - ξl[clusters[i]]) for i in axes(w, 1)]
+    else
+        if isnothing(params.ξ)
+            @assert !params.hasoutliers
+            ξg = μ / (1.0 - sum(x -> x^2, cluster_weight) / total_weight^2)
+            ξg >= 1 && throw(ArgumentError("μ is too large to generate a graph"))
+        else
+            ξg = params.ξ
+        end
+        w_internal_raw = [w[i] * (1 - ξg) for i in axes(w, 1)]
+        if params.hasoutliers
+            for i in findall(==(1), clusters)
+                w_internal_raw[i] = 0
+            end
+        end
+    end
+
+    clusterlist = [Int[] for i in axes(s, 1)]
+    for i in axes(clusters, 1)
+        push!(clusterlist[clusters[i]], i)
+    end
+
+    edges = Set{Tuple{Int, Int}}()
+
+    unresolved_collisions = 0
+    w_internal = zeros(Int, length(w_internal_raw))
+    for cluster in clusterlist
+        maxw_idx = argmax(view(w_internal_raw, cluster))
+        wsum = 0
+        for i in axes(cluster, 1)
+            if i != maxw_idx
+                neww = randround(w_internal_raw[cluster[i]])
+                w_internal[cluster[i]] = neww
+                wsum += neww
+            end
+        end
+        maxw = floor(Int, w_internal_raw[cluster[maxw_idx]])
+        w_internal[cluster[maxw_idx]] = maxw + (isodd(wsum) ? iseven(maxw) : isodd(maxw))
+        if w_internal[cluster[maxw_idx]] > w[cluster[maxw_idx]]
+            @assert w[cluster[maxw_idx]] + 1 == w_internal[cluster[maxw_idx]]
+            w[cluster[maxw_idx]] += 1
+        end
+
+        if params.hasoutliers && cluster === clusterlist[1]
+            @assert findall(clusters .== 1) == cluster
+            @assert all(iszero, w_internal[cluster])
+        end
+        stubs = Int[]
+        for i in cluster
+            for j in 1:w_internal[i]
+                push!(stubs, i)
+            end
+        end
+        @assert sum(w_internal[cluster]) == length(stubs)
+        @assert iseven(length(stubs))
+        if params.hasoutliers && cluster === clusterlist[1]
+            @assert isempty(stubs)
+        end
+        shuffle!(stubs)
+        local_edges = Set{Tuple{Int, Int}}()
+        recycle = Tuple{Int,Int}[]
+        for i in 1:2:length(stubs)
+            e = minmax(stubs[i], stubs[i+1])
+            if (e[1] == e[2]) || (e in local_edges)
+                push!(recycle, e)
+            else
+                push!(local_edges, e)
+            end
+        end
+        last_recycle = length(recycle)
+        recycle_counter = last_recycle
+        while !isempty(recycle)
+            recycle_counter -= 1
+            if recycle_counter < 0
+                if length(recycle) < last_recycle
+                    last_recycle = length(recycle)
+                    recycle_counter = last_recycle
+                else
+                    break
+                end
+            end
+            p1 = popfirst!(recycle)
+            from_recycle = 2 * length(recycle) / length(stubs)
+            success = false
+            if !(isempty(recycle) && isempty(local_edges))
+                for _ in 1:2:length(stubs)
+                    p2 = if rand() < from_recycle || isempty(local_edges)
+                        used_recycle = true
+                        recycle_idx = rand(axes(recycle, 1))
+                        recycle[recycle_idx]
+                    else
+                        used_recycle = false
+                        rand(local_edges)
+                    end
+                    if rand() < 0.5
+                        newp1 = minmax(p1[1], p2[1])
+                        newp2 = minmax(p1[2], p2[2])
+                    else
+                        newp1 = minmax(p1[1], p2[2])
+                        newp2 = minmax(p1[2], p2[1])
+                    end
+                    if newp1 == newp2
+                        good_choice = false
+                    elseif (newp1[1] == newp1[2]) || (newp1 in local_edges)
+                        good_choice = false
+                    elseif (newp2[1] == newp2[2]) || (newp2 in local_edges)
+                        good_choice = false
+                    else
+                        good_choice = true
+                    end
+                    if good_choice
+                        if used_recycle
+                            recycle[recycle_idx], recycle[end] = recycle[end], recycle[recycle_idx]
+                            pop!(recycle)
+                        else
+                            pop!(local_edges, p2)
+                        end
+                        success = true
+                        push!(local_edges, newp1)
+                        push!(local_edges, newp2)
+                        break
+                    end
+                end
+            end
+            success || push!(recycle, p1)
+        end
+        old_len = length(edges)
+        union!(edges, local_edges)
+        @assert length(edges) == old_len + length(local_edges)
+        @assert 2 * (length(local_edges) + length(recycle)) == length(stubs)
+        for (a, b) in recycle
+            w_internal[a] -= 1
+            w_internal[b] -= 1
+        end
+        unresolved_collisions += length(recycle)
+    end
+
+    if unresolved_collisions > 0
+        println("Unresolved_collisions: ", unresolved_collisions,
+                "; fraction: ", 2 * unresolved_collisions / total_weight)
+    end
+
+    stubs = Int[]
+    for i in axes(w, 1)
+        for j in w_internal[i]+1:w[i]
+            push!(stubs, i)
+        end
+    end
+    @assert sum(w) == length(stubs) + sum(w_internal)
+    if params.hasoutliers
+        if 2 * sum(w[clusters .== 1]) > length(stubs)
+            @warn "Because of low value of ξ the outlier nodes form a community. " *
+                  "It is recommended to increase ξ."
+        end
+    end
     shuffle!(stubs)
-
-    local_edges = Set{Tuple{Int32,Int32}}()
-    recycle = Tuple{Int32,Int32}[]
-
+    if isodd(length(stubs))
+        maxi = 1
+        @assert w[stubs[maxi]] > w_internal[stubs[maxi]]
+        for i in 2:length(stubs)
+            si = stubs[i]
+            @assert w[si] > w_internal[si]
+            if w[si] > w[stubs[maxi]]
+                maxi = i
+            end
+        end
+        si = popat!(stubs, maxi)
+        @assert w[si] > w_internal[si]
+        w[si] -= 1
+    end
+    global_edges = Set{Tuple{Int, Int}}()
+    recycle = Tuple{Int,Int}[]
     for i in 1:2:length(stubs)
         e = minmax(stubs[i], stubs[i+1])
-        if (e[1] == e[2]) || (e in local_edges)
+        if (e[1] == e[2]) || (e in global_edges) || (e in edges)
             push!(recycle, e)
         else
-            push!(local_edges, e)
+            push!(global_edges, e)
         end
     end
     last_recycle = length(recycle)
@@ -217,202 +410,52 @@ function generate_initial_graph(weights::Vector{Int32})
                 break
             end
         end
-        p1 = popfirst!(recycle)
+        p1 = pop!(recycle)
         from_recycle = 2 * length(recycle) / length(stubs)
-        success = false
-        if !(isempty(recycle) && isempty(local_edges))
-            for _ in 1:2:length(stubs)
-                p2 = if rand() < from_recycle || isempty(local_edges)
-                    used_recycle = true
-                    recycle_idx = rand(axes(recycle, 1))
-                    recycle[recycle_idx]
+        p2 = if rand() < from_recycle
+            i = rand(axes(recycle, 1))
+            recycle[i], recycle[end] = recycle[end], recycle[i]
+            pop!(recycle)
+        else
+            x = rand(global_edges)
+            pop!(global_edges, x)
+        end
+        if rand() < 0.5
+            newp1 = minmax(p1[1], p2[1])
+            newp2 = minmax(p1[2], p2[2])
+        else
+            newp1 = minmax(p1[1], p2[2])
+            newp2 = minmax(p1[2], p2[1])
+        end
+        for newp in (newp1, newp2)
+            if (newp[1] == newp[2]) || (newp in global_edges) || (newp in edges)
+                push!(recycle, newp)
+            else
+                push!(global_edges, newp)
+            end
+        end
+    end
+    old_len = length(edges)
+    union!(edges, global_edges)
+    @assert length(edges) == old_len + length(global_edges)
+    if isempty(recycle)
+        @assert 2 * length(global_edges) == length(stubs)
+    else
+        last_recycle = length(recycle)
+        recycle_counter = last_recycle
+        while !isempty(recycle)
+            recycle_counter -= 1
+            if recycle_counter < 0
+                if length(recycle) < last_recycle
+                    last_recycle = length(recycle)
+                    recycle_counter = last_recycle
                 else
-                    used_recycle = false
-                    rand(local_edges)
-                end
-                if rand() < 0.5
-                    newp1 = minmax(p1[1], p2[1])
-                    newp2 = minmax(p1[2], p2[2])
-                else
-                    newp1 = minmax(p1[1], p2[2])
-                    newp2 = minmax(p1[2], p2[1])
-                end
-                if newp1 == newp2
-                    good_choice = false
-                elseif (newp1[1] == newp1[2]) || (newp1 in local_edges)
-                    good_choice = false
-                elseif (newp2[1] == newp2[2]) || (newp2 in local_edges)
-                    good_choice = false
-                else
-                    good_choice = true
-                end
-                if good_choice
-                    if used_recycle
-                        recycle[recycle_idx], recycle[end] = recycle[end], recycle[recycle_idx]
-                        pop!(recycle)
-                    else
-                        pop!(local_edges, p2)
-                    end
-                    success = true
-                    push!(local_edges, newp1)
-                    push!(local_edges, newp2)
                     break
                 end
             end
-        end
-        success || push!(recycle, p1)
-    end
-
-    unused_stubs = Int32[]
-    for (a, b) in recycle
-        push!(unused_stubs, a, b)
-    end
-
-    @assert sum(weights) == length(local_edges) * 2 + length(unused_stubs)
-
-    return local_edges, unused_stubs
-end
-
-function config_model(clusters, params)
-    w, s, ξ = params.w, params.s, params.ξ
-
-    @assert iseven(sum(w))
-    w_internal_raw = randround.([w[i] * (1 - ξ) for i in axes(w, 1)])
-    for i in findall(==([1]), clusters)
-        w_internal_raw[i] = 0
-    end
-
-    w_external = w - w_internal_raw
-
-    clusterlist = [Int32[] for i in 1:maximum(c -> maximum(c), clusters)] # list of nodes in each cluster
-    for i in axes(clusters, 1)
-        c = clusters[i]
-        for x in c
-            push!(clusterlist[x], i)
-        end
-    end
-
-    # @time w_internal_comm = [zeros(Int32, length(w_internal_raw)) for i in 1:length(clusterlist)] # this holds internal degree of each community
-
-    # @time for i in axes(clusters, 1)
-    #     wi = w_internal_raw[i]
-    #     nc = length(clusters[i])
-    #     share = floor(Int, wi / nc)
-    #     extra = wi - nc * share
-    #     z = sample(1:nc, extra, replace=false)
-    #     for j in 1:nc
-    #         w_internal_comm[clusters[i][j]][i] = share + (j in z)
-    #     end
-    # end
-
-    # for wic in w_internal_comm # make sure that for each community sum of its degrees is even
-    #     if isodd(sum(wic))
-    #         largest = argmax(wic)
-    #         @assert wic[largest] > 0
-    #         wic[largest] -= 1
-    #         w_external[largest] += 1
-    #     end
-    # end
-
-    # @assert sum(w_internal_comm) + w_external == w
-    # @assert iseven(sum(w_external))
-    # @assert all(x -> iseven(sum(x)), w_internal_comm)
-    # @assert all(==(0), w_internal_comm[1])
-
-    # partial_graphs = Set{Tuple{Int32,Int32}}[]
-    # unused_stubs = Int32[]
-
-    # idxs_com = 0
-    # for w_int in w_internal_comm
-    #     idxs_com += 1
-    #     if idxs_com == 1 # outlier community
-    #         @assert sum(w_int) == 0
-    #     else
-    #         g, s = generate_initial_graph(w_int)
-    #         push!(partial_graphs, g)
-    #         append!(unused_stubs, s)
-    #     end
-    # end
-
-    w_internal_node = [Dict{Int32,Int32}() for i in 1:length(w_internal_raw)] # this holds internal degree of each community
-    partial_graphs = Set{Tuple{Int32,Int32}}[]
-    unused_stubs = Int32[]
-    for i in axes(clusters, 1)
-        wi = w_internal_raw[i]
-        nc = length(clusters[i])
-        share = floor(Int, wi / nc)
-        extra = wi - nc * share
-        z = sample(1:nc, extra, replace=false)
-        for j in 1:nc
-            if clusters[i][j] == 1
-                @assert share + (j in z) == 0
-                @assert nc == 1
-            else
-                w_internal_node[i][clusters[i][j]] = share + (j in z)
-            end
-        end
-        @assert wi == share * nc + length(z)
-    end
-
-    # total_wic = zeros(Int32, length(w_internal_raw))
-    wic = zeros(Int32, length(w_internal_raw))
-    for i in 2:length(clusterlist)
-        fill!(wic, 0)
-        for j in clusterlist[i]
-            wic[j] = w_internal_node[j][i]
-        end
-        if isodd(sum(wic))
-            largest = argmax(wic)
-            @assert wic[largest] > 0
-            wic[largest] -= 1
-            w_external[largest] += 1
-        end
-        @assert iseven(sum(wic))
-        # total_wic += wic
-
-        g, s = generate_initial_graph(wic)
-        push!(partial_graphs, g)
-        append!(unused_stubs, s)
-    end
-    # @assert w_external + total_wic == w
-    @assert iseven(sum(w_external))
-
-    let
-        g, s = generate_initial_graph(w_external)
-        push!(partial_graphs, g)
-        append!(unused_stubs, s)
-    end
-
-    edges = Set{Tuple{Int32,Int32}}()
-
-    for g in partial_graphs
-        for e in g
-            if e in edges
-                push!(unused_stubs, e[1], e[2]) # duplicate across subgraphs
-            else
-                push!(edges, e)
-            end
-        end
-    end
-
-    @assert sum(w) == length(edges) * 2 + length(unused_stubs)
-    @assert iseven(length(unused_stubs))
-
-    recycle = [(unused_stubs[i], unused_stubs[i+1]) for i in 1:2:length(unused_stubs)]
-    shuffle!(recycle)
-    while !isempty(recycle)
-        p1 = popfirst!(recycle)
-        from_recycle = length(recycle) / length(edges)
-        success = false
-        for _ in 1:length(edges)
-            p2 = if rand() < from_recycle
-                used_recycle = true
-                recycle_idx = rand(axes(recycle, 1))
-                recycle[recycle_idx]
-            else
-                used_recycle = false
-                rand(edges)
-            end
+            p1 = pop!(recycle)
+            x = rand(edges)
+            p2 = pop!(edges, x)
             if rand() < 0.5
                 newp1 = minmax(p1[1], p2[1])
                 newp2 = minmax(p1[2], p2[2])
@@ -420,33 +463,20 @@ function config_model(clusters, params)
                 newp1 = minmax(p1[1], p2[2])
                 newp2 = minmax(p1[2], p2[1])
             end
-            if newp1 == newp2
-                good_choice = false
-            elseif (newp1[1] == newp1[2]) || (newp1 in edges)
-                good_choice = false
-            elseif (newp2[1] == newp2[2]) || (newp2 in edges)
-                good_choice = false
-            else
-                good_choice = true
-            end
-            if good_choice
-                if used_recycle
-                    recycle[recycle_idx], recycle[end] = recycle[end], recycle[recycle_idx]
-                    pop!(recycle)
+            for newp in (newp1, newp2)
+                if (newp[1] == newp[2]) || (newp in edges)
+                    push!(recycle, newp)
                 else
-                    pop!(edges, p2)
+                    push!(edges, newp)
                 end
-                success = true
-                push!(edges, newp1)
-                push!(edges, newp2)
-                break
             end
         end
-        success || push!(recycle, p1)
     end
-
-    @assert isempty(recycle)
-    @assert sum(w) == 2 * length(edges)
+    if !isempty(recycle)
+        unresolved_collisions = length(recycle)
+        println("Very hard graph. Failed to generate ", unresolved_collisions,
+                "edges; fraction: ", 2 * unresolved_collisions / total_weight)
+    end
     return edges
 end
 
@@ -461,7 +491,6 @@ The ordering of vertices and clusters is in descending order (as in `params`).
 """
 function gen_graph(params::ABCDParams)
     clusters = populate_clusters(params)
-    @info "Generating graph"
-    @time edges = config_model(clusters, params)
+    edges = params.isCL ? CL_model(clusters, params) : config_model(clusters, params)
     (edges=edges, clusters=clusters)
 end
