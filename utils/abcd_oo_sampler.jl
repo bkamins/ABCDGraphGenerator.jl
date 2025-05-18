@@ -2,8 +2,8 @@ using Pkg
 using ABCDGraphGenerator
 using Random
 
-@info "Usage: julia abcd_sampler.jl config_filename"
-@info "For the syntax of config_filename see example_config.toml file"
+@info "Usage: julia abcd_oo_sampler.jl config_filename"
+@info "For the syntax of config_filename see example_config_oo.toml file"
 
 filename = ARGS[1]
 conf = Pkg.TOML.parsefile(filename)

@@ -272,7 +272,7 @@ function config_model_oo(clusters, params)
     w, s, ξ = params.w, params.s, params.ξ
 
     @assert iseven(sum(w))
-    w_internal_raw = randround.([w[i] * (1 - ξ) for i in axes(w, 1)])
+    w_internal_raw = Int32.(randround.([w[i] * (1 - ξ) for i in axes(w, 1)]))
     for i in findall(==([1]), clusters)
         w_internal_raw[i] = 0
     end
