@@ -58,10 +58,10 @@ xi = "0.2"                    # fraction of edges to fall in background graph
 #mu = "0.2"                   # mixing parameter
 islocal = "false"             # if "true" mixing parameter is restricted to local cluster, otherwise it is global
 isCL = "false"                # if "false" use configuration model, if "true" use Chung-Lu
-degreefile = "deg.dat"        # name of file do generate that contains vertex degrees
-communitysizesfile = "cs.dat" # name of file do generate that contains community sizes
-communityfile = "com.dat"     # name of file do generate that contains assignments of vertices to communities
-networkfile = "edge.dat"      # name of file do generate that contains edges of the generated graph
+degreefile = "degrees.dat"    # name of file do generate that contains vertex degrees
+communitysizesfile = "community_sizes.dat" # name of file do generate that contains community sizes
+communityfile = "cmmunity.dat" # name of file do generate that contains assignments of vertices to communities
+networkfile = "network.dat"   # name of file do generate that contains edges of the generated graph
 nout = "100"                  # number of vertices in graph that are outliers; optional parameter
                               # if nout is passed and is not zero then we require islocal = "false",
                               # isCL = "false", and xi (not mu) must be passed
@@ -82,7 +82,7 @@ $ julia abcd_sampler.jl example_config.toml
 $ shasum -a 256 edge.dat #sha256sum edge.dat on Linux
 a2102912153726dc20da30ee7dbfc479ee6b8fa785a11a04e5d044320f50c0fa  edge.dat
 ```
-After the program terminates four files, `deg.dat`, `cs.dat`, `com.dat` and `edge.dat`
+After the program terminates four files, `degrees.dat`, `community_sizes.dat`, `community.dat` and `network.dat`
 are created in the working directory.
 
 `deg_sampler.jl`, `com_sampler.jl` and `graph_sampler.jl` files are provided
