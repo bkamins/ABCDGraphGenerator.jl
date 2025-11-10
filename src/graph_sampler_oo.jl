@@ -395,6 +395,7 @@ function config_model_oo(clusters, params)
 
     recycle = [(unused_stubs[i], unused_stubs[i+1]) for i in 1:2:length(unused_stubs)]
     shuffle!(recycle)
+    stuck_counter = 0
     while !isempty(recycle)
         p1 = popfirst!(recycle)
         from_recycle = length(recycle) / length(edges)
@@ -437,7 +438,16 @@ function config_model_oo(clusters, params)
                 break
             end
         end
-        success || push!(recycle, p1)
+        if success
+            stuck_counter = 0
+        else
+            push!(recycle, p1)
+            stuck_counter += 1
+            if stuck_counter == 100 * length(recycle)
+                @error "Could not generate a graph for a given set of input parameters. Please verify that the provided requirements for input degree sequence lead to a graphic degree sequence."
+                exit(-1)
+            end
+        end
     end
 
     @assert isempty(recycle)
