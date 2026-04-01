@@ -5,7 +5,7 @@ Bogumił Kamiński, Paweł Prałat, François Théberge
 
 ### Julia API
 
-The package does not export functions and types. The public API is the following:
+The package does not export functions and types. The public API for ABCD and ABCD-o is the following:
 * `ABCDGraphGenerator.ABCDParams`: type holding information about sampled degrees,
   sampled cluster sizes and required mode of ABCD graph generation
 * `ABCDGraphGenerator.gen_graph`: ABCD graph generator that uses `ABCDParams`
@@ -16,6 +16,17 @@ The package does not export functions and types. The public API is the following
 
 The reason for such split of the functionality is that generation of vertex degrees
 and community sizes is fast, while the generation of the final graph is the most expensive step.
+
+The public AIP for ABCD-oo is a bit different, because internally it uses different data types
+to be more memory efficient (as the algorithm requires more memory):
+* `ABCDGraphGenerator.ABCDParamsOO`: type holding information about sampled degrees,
+  sampled cluster sizes and required mode of ABCD-oo graph generation
+* `ABCDGraphGenerator.gen_graph_oo`: ABCD graph generator that uses `ABCDParamsOO`
+  specification
+* `ABCDGraphGenerator.sample_degrees_oo`: sample degrees of vertices following power law
+* `ABCDGraphGenerator.sample_communitiesample_communities_oos`: sample community sizes following power law
+* `ABCDGraphGenerator.get_ev`: get expected value of truncated discrete power law distribution
+
 
 ### Using ABCDGraphGenerator.jl from R and Python
 
